@@ -56,6 +56,8 @@
 extern "C" {
 #endif
 
+/* ============================================= Prototypes ============================================= */
+
 VkInstance kvfCreateInstance(const char** extensionsEnabled, uint32_t extensionsCount);
 void kvfDestroyInstance(VkInstance instance);
 
@@ -68,6 +70,8 @@ void kvfFindQueueFamilies(VkPhysicalDevice physical, VkSurfaceKHR surface);
 VkDevice kvfCreateDefaultDevice(VkPhysicalDevice physical);
 VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uint32_t extensions_count);
 void kvfDestroyDevice(VkDevice device);
+
+/* ========================================== Implementation =========================================== */
 
 #ifdef __cplusplus
 }
