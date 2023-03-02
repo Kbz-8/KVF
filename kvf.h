@@ -39,8 +39,7 @@
  *	If you are using Volk or any other meta loader you must define KVF_IMPL_VK_NO_PROTOTYPES
  *	before including this file to avoid conflicts with Vulkan prototypes.
  *
- *	You can also #define KVF_ENABLE_VALIDATION_LAYERS to enable validation layers when 
- *	compiling in release (they are always enabled in debug).
+ *	You can also #define KVF_ENABLE_VALIDATION_LAYERS to enable validation layers.
  */
 
 #ifndef KBZ_8_VULKAN_FRAMEWORK_H
@@ -52,11 +51,17 @@
 
 #include <stdint.h>
 
+/* ============================================= Prototypes ============================================= */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* ============================================= Prototypes ============================================= */
+typedef enum
+{
+	KVF_GRAPHICS_QUEUE,
+	KVF_PRESENT_QUEUE
+} KvfQueueType;
 
 VkInstance kvfCreateInstance(const char** extensionsEnabled, uint32_t extensionsCount);
 void kvfDestroyInstance(VkInstance instance);
@@ -66,16 +71,23 @@ VkPhysicalDevice kvfPickGoodDefaultPhysicalDevice(VkInstance instance, VkSurface
 VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR surface, const char** deviceExtensions, uint32_t deviceExtensionsCount);
 
 void kvfFindQueueFamilies(VkPhysicalDevice physical, VkSurfaceKHR surface);
+VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue);
 
 VkDevice kvfCreateDefaultDevice(VkPhysicalDevice physical);
 VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uint32_t extensions_count);
 void kvfDestroyDevice(VkDevice device);
 
-/* ========================================== Implementation =========================================== */
+VkFence kvfCreateFence(VkDevice device);
+void kvfDestroyFence(VkDevice device, VkFence fence);
+
+VkSemaphore kvfCreateSemaphore(VkDevice device);
+void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 
 #ifdef __cplusplus
 }
 #endif
+
+/* ========================================== Implementation =========================================== */
 
 #ifdef KVF_IMPLEMENTATION
 
@@ -100,6 +112,10 @@ void kvfDestroyDevice(VkDevice device);
 
 int32_t __kvf_graphics_queue_family = -1;
 int32_t __kvf_present_queue_family = -1;
+
+#ifdef KVF_ENABLE_VALIDATION_LAYERS
+	VkDebugUtilsMessengerEXT __kvf_debug_messenger;
+#endif
 
 const char* verbaliseResultVk(VkResult result)
 {
@@ -139,6 +155,40 @@ void checkVk(VkResult result)
 		printf("KVF Vulkan error : %s\n", verbaliseResultVk(result));
 }
 
+#ifdef KVF_ENABLE_VALIDATION_LAYERS
+	bool __kvfCheckValidationLayerSupport()
+	{
+		uint32_t layer_count;
+		vkEnumerateInstanceLayerProperties(&layer_count, NULL);
+		VkLayerProperties* available_layers = KVF_MALLOC(sizeof(VkLayerProperties) * layer_count);
+		vkEnumerateInstanceLayerProperties(&layer_count, available_layers);
+
+		for(int i = 0; i < layer_count; i++)
+		{
+			if(strcmp(available_layers[i].layerName, "VK_LAYER_KHRONOS_validation") == 0)
+				return true;
+		}
+		return false;
+	}
+
+	VKAPI_ATTR VkBool32 VKAPI_CALL __kvfDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+	{
+		if(messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+			printf("\nKVF Vulkan validation layer error : %s\n", pCallbackData->pMessage);
+		else if(messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+			printf("\nKVF Vulkan validation layer warning : %s\n", pCallbackData->pMessage);
+		return VK_FALSE;
+	}
+
+	void __kvfPopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* createInfo)
+	{
+		createInfo->sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+		createInfo->messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		createInfo->messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		createInfo->pfnUserCallback = __kvfDebugCallback;
+	}
+#endif // KVF_ENABLE_VALIDATION_LAYERS
+
 VkInstance kvfCreateInstance(const char** extensionsEnabled, uint32_t extensionsCount)
 {
 	VkInstance vk_instance = VK_NULL_HANDLE;
@@ -146,10 +196,36 @@ VkInstance kvfCreateInstance(const char** extensionsEnabled, uint32_t extensions
 	VkInstanceCreateInfo createInfo;
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	createInfo.pApplicationInfo = NULL;
+	createInfo.flags = 0;
 	createInfo.enabledExtensionCount = extensionsCount;
 	createInfo.ppEnabledExtensionNames = extensionsEnabled;
+	createInfo.enabledLayerCount = 0;
+	createInfo.ppEnabledLayerNames = NULL;
+	createInfo.pNext = NULL;
+
+#ifdef KVF_ENABLE_VALIDATION_LAYERS
+	const char** new_extension_set = NULL;
+	if(__kvfCheckValidationLayerSupport())
+	{
+		const char* layers[] = { "VK_LAYER_KHRONOS_validation" };
+		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = { 0 };
+		__kvfPopulateDebugMessengerCreateInfo(&debugCreateInfo);
+		new_extension_set = KVF_MALLOC(sizeof(char*) * (extensionsCount + 1));
+		memcpy(new_extension_set, extensionsEnabled, sizeof(char*) * extensionsCount);
+		new_extension_set[extensionsCount] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+
+		createInfo.enabledExtensionCount = extensionsCount + 1;
+		createInfo.ppEnabledExtensionNames = new_extension_set;
+		createInfo.enabledLayerCount = 1;
+		createInfo.ppEnabledLayerNames = layers;
+		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+	}
+#endif
 
 	checkVk(vkCreateInstance(&createInfo, NULL, &vk_instance));
+#ifdef KVF_ENABLE_VALIDATION_LAYERS
+	KVF_FREE(new_extension_set);
+#endif
 	return vk_instance;
 }
 
@@ -157,14 +233,19 @@ void kvfDestroyInstance(VkInstance instance)
 {
 	if(instance == VK_NULL_HANDLE)
 		return;
-	checkVk(vkDestroyInstance(instance, NULL));
+#ifdef KVF_ENABLE_VALIDATION_LAYERS
+	PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	if(func)
+		func(instance, __kvf_debug_messenger, NULL);
+#endif
+	vkDestroyInstance(instance, NULL);
 }
 
 VkPhysicalDevice kvfPickFirstPhysicalDevice(VkInstance instance)
 {
 	uint32_t device_count;
-	vkphysicaldevice* devices = NULL;
-	vkphysicaldevice chosen_one = VK_NULL_HANDLE;
+	VkPhysicalDevice* devices = NULL;
+	VkPhysicalDevice chosen_one = VK_NULL_HANDLE;
 
 	KVF_ASSERT(instance != VK_NULL_HANDLE);
 	
@@ -178,17 +259,20 @@ VkPhysicalDevice kvfPickFirstPhysicalDevice(VkInstance instance)
 
 void kvfFindQueueFamilies(VkPhysicalDevice physical, VkSurfaceKHR surface)
 {
-	if(__kvf_graphics_queue_family == -1 || __kvf_present_queue_family == -1)
+	if(__kvf_graphics_queue_family != -1 && __kvf_present_queue_family != -1)
 		return;
 	uint32_t queue_family_count;
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+	vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, NULL);
 	VkQueueFamilyProperties* queue_families = KVF_MALLOC(sizeof(VkQueueFamilyProperties) * queue_family_count);
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families);
+	vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, queue_families);
 	
 	for(int i = 0; i < queue_family_count; i++)
 	{
-		if(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+		if(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT && __kvf_graphics_queue_family == -1)
+		{
 			__kvf_graphics_queue_family = i;
+			continue;
+		}
 		VkBool32 present_support = false;
 		vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present_support);
 		if(present_support)
@@ -216,8 +300,8 @@ VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR sur
 	KVF_ASSERT(surface != VK_NULL_HANDLE);
 	
 	vkEnumeratePhysicalDevices(instance, &device_count, NULL);
-	devices = KVF_MALLOC(sizeof(VkPhysicaDevice) * device_count + 1);
-	vkEnumeratePhysicalDvices(instance, &device_count, devices);
+	devices = KVF_MALLOC(sizeof(VkPhysicalDevice) * device_count + 1);
+	vkEnumeratePhysicalDevices(instance, &device_count, devices);
 
 	for(int i = 0; i < device_count; i++)
 	{
@@ -228,12 +312,12 @@ VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR sur
 		vkEnumerateDeviceExtensionProperties(devices[i], NULL, &extension_count, props);
 	
 		bool are_there_required_device_extensions = true;
-		for(int j = 0; j < extensions_count; j++)
+		for(int j = 0; j < deviceExtensionsCount; j++)
 		{
 			bool is_there_extension = false;
-			for(int k = 0; k < deviceExtensionsCount; k++)
+			for(int k = 0; k < extension_count; k++)
 			{
-				if(strcmp(deviceExtensions[k], props[j].extensionName) == 0)
+				if(strcmp(deviceExtensions[j], props[k].extensionName) == 0)
 				{
 					is_there_extension = true;
 					break;
@@ -262,11 +346,11 @@ VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR sur
 		
 		// If we get there, the device is good
 		chosen_one = devices[i];
-		break;
+		KVF_FREE(devices);
+		return chosen_one;
 	}
-
 	KVF_FREE(devices);
-	return chosen_one;
+	return VK_NULL_HANDLE;
 }
 
 VkDevice kvfCreateDefaultDevice(VkPhysicalDevice physical)
@@ -287,21 +371,28 @@ VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uin
 	queue_create_info[0].queueFamilyIndex = __kvf_graphics_queue_family;
 	queue_create_info[0].queueCount = 1;
 	queue_create_info[0].pQueuePriorities = &queue_priority;
+	queue_create_info[0].flags = 0;
+	queue_create_info[0].pNext = NULL;
 	queue_create_info[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	queue_create_info[1].queueFamilyIndex = __kvf_present_queue_family;
 	queue_create_info[1].queueCount = 1;
 	queue_create_info[1].pQueuePriorities = &queue_priority;
+	queue_create_info[1].flags = 0;
+	queue_create_info[1].pNext = NULL;
 
-	VkPhysicalDeviceFeatures device_features;
+	VkPhysicalDeviceFeatures device_features = { VK_FALSE };
 
 	VkDeviceCreateInfo createInfo;
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.queueCreateInfoCount = sizeof(queue_create_info) / sizeof(queue_create_info[0]);
+	createInfo.queueCreateInfoCount = 2;
 	createInfo.pQueueCreateInfos = queue_create_info;
 	createInfo.pEnabledFeatures = &device_features;
-	createInfo.enabledExtensionCount = deviceExtensions.size();
-	createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+	createInfo.enabledExtensionCount = extensions_count;
+	createInfo.ppEnabledExtensionNames = extensions;
 	createInfo.enabledLayerCount = 0;
+	createInfo.ppEnabledLayerNames = NULL;
+	createInfo.flags = 0;
+	createInfo.pNext = NULL;
 
 	VkDevice device = VK_NULL_HANDLE;
 	checkVk(vkCreateDevice(physical, &createInfo, NULL, &device));
@@ -312,7 +403,58 @@ void kvfDestroyDevice(VkDevice device)
 {
 	if(device == VK_NULL_HANDLE)
 		return;
-	checkVk(vkDestroyDevice(device, NULL));
+	vkDestroyDevice(device, NULL);
+}
+
+VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue)
+{
+	KVF_ASSERT(__kvf_graphics_queue_family != -1);
+	KVF_ASSERT(__kvf_present_queue_family != -1);
+
+	VkQueue vk_queue = VK_NULL_HANDLE;
+
+	if(queue == KVF_GRAPHICS_QUEUE)
+		vkGetDeviceQueue(device, __kvf_graphics_queue_family, 0, &vk_queue);
+	else if(queue == KVF_GRAPHICS_QUEUE)
+		vkGetDeviceQueue(device, __kvf_present_queue_family, 0, &vk_queue);
+	return vk_queue;
+}
+
+VkFence kvfCreateFence(VkDevice device)
+{
+	VkFenceCreateInfo fenceInfo = { 0 };
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	
+	VkFence fence = VK_NULL_HANDLE;
+	checkVk(vkCreateFence(device, &fenceInfo, NULL, &fence));
+	return fence;
+}
+
+void kvfDestroyFence(VkDevice device, VkFence fence)
+{
+	if(fence == VK_NULL_HANDLE)
+		return;
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	vkDestroyFence(device, fence, NULL);
+}
+
+VkSemaphore kvfCreateSemaphore(VkDevice device)
+{
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkSemaphore semaphore = VK_NULL_HANDLE;
+	checkVk(vkCreateSemaphore(Render_Core::get().getDevice().get(), &semaphoreInfo, NULL, &semaphores));
+	return semaphore;
+}
+
+void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
+{
+	if(semaphore == VK_NULL_HANDLE)
+		return;
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	vkDestroySemaphore(device, semaphores, NULL);
 }
 
 #endif // KVF_IMPLEMENTATION
