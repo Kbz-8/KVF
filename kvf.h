@@ -83,8 +83,8 @@ void kvfDestroyFence(VkDevice device, VkFence fence);
 VkSemaphore kvfCreateSemaphore(VkDevice device);
 void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 
-VkSwapchainKHR kvfCreateSwapchain(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface);
-void kvfDestroySwapchain(VkDevice device, VkSwapchainKHR swapchain);
+VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extend, bool tryVsync);
+void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain);
 
 #ifdef __cplusplus
 }
@@ -271,11 +271,8 @@ void kvfFindQueueFamilies(VkPhysicalDevice physical, VkSurfaceKHR surface)
 	
 	for(int i = 0; i < queue_family_count; i++)
 	{
-		if(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT && __kvf_graphics_queue_family == -1)
-		{
+		if(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			__kvf_graphics_queue_family = i;
-			continue;
-		}
 		VkBool32 present_support = false;
 		vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present_support);
 		if(present_support)
@@ -387,7 +384,7 @@ VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uin
 
 	VkDeviceCreateInfo createInfo;
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.queueCreateInfoCount = 2;
+	createInfo.queueCreateInfoCount = (__kvf_graphics_queue_family == __kvf_present_queue_family ? 1 : 2);
 	createInfo.pQueueCreateInfos = queue_create_info;
 	createInfo.pEnabledFeatures = &device_features;
 	createInfo.enabledExtensionCount = extensions_count;
@@ -460,12 +457,115 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 	vkDestroySemaphore(device, semaphores, NULL);
 }
 
-VkSwapchainKHR kvfCreateSwapchain(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface)
+typedef struct
 {
+	VkSurfaceCapabilitiesKHR capabilities;
+	VkSurfaceFormatKHR* formats;
+	VkPresentModeKHR* presentModes;
+	uint32_t formatsCount;
+	uint32_t presentModesCount;
+} __KvfSwapchainSupportInternal;
 
+__KvfSwapchainSupportInternal __kvfQuerySwapchainSupport(VkPhysicalDevice physical, VkSurfaceKHR surface)
+{
+	__KvfSwapchainSupportInternal support;
+
+	checkVk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &support.capabilities));
+
+	vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formatCount, NULL);
+	if(support.formatCount != 0)
+	{
+		support.formats = KVF_MALLOC(sizeof(VkSurfaceFormatKHR) * support.formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formatCount, support.formats);
+	}
+
+	vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModeCount, NULL);
+	if(support.presentModeCount != 0)
+	{
+		support.presentModes = KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModeCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModeCount, support.presentModes);
+	}
+	return support;
 }
 
-void kvfDestroySwapchain(VkDevice device, VkSwapchainKHR swapchain)
+VkSurfaceFormatKHR __kvfChooseSwapSurfaceFormat(__KvfSwapchainSupportInternal* support)
+{
+	for(int i = 0; i < support->formatsCount; i++)
+	{
+		if(support->formats[i].format == VK_FORMAT_R8G8B8A8_SRGB && support->formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+			return support->formats[i];
+	}
+	return support->formats[0];
+}
+
+VkPresentModeKHR __kvfChooseSwapPresentMode(__KvfSwapchainSupportInternal* support, bool tryVsync)
+{
+	if(tryVsync == false)
+		return VK_PRESENT_MODE_IMMEDIATE_KHR;
+	for(int i = 0; i < support->presentModesCount; i++)
+	{
+		if(support->presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+			return support->presentModes[i];
+	}
+	return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+uint32_t __kvfClamp(uint32_t i, uint32_t min, uint32_t max)
+{
+	const uint32_t t = i < min ? min : i;
+	return t > max ? max : t;
+}
+
+VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extend, bool tryVsync)
+{
+	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+	__KvfSwapchainSupportInternal support = __kvfQuerySwapchainSupport(physical, surface);
+
+	VkSurfaceFormatKHR surfaceFormat = __kvfChooseSwapSurfaceFormat(&support);
+	VkPresentModeKHR presentMode = __kvfChooseSwapPresentMode(&support, tryVsync);
+
+	uint32_t imageCount = support.capabilities.minImageCount + 1;
+	if(support.capabilities.maxImageCount > 0 && imageCount > support.capabilities.maxImageCount)
+		imageCount = support.capabilities.maxImageCount;
+
+	uint32_t queueFamilyIndices[] = { __kvf_graphics_queue_family, __kvf_present_queue_family };
+
+	if(capabilities.currentExtent.width != UINT32_MAX)
+		extend = support.capabilities.currentExtent;
+	else
+	{
+		extent.width = __kvfClamp(extent.width, support.capabilities.minImageExtent.width, support.capabilities.maxImageExtent.width);
+		extent.height = __kvfClamp(extent.height, support.capabilities.minImageExtent.height, support.capabilities.maxImageExtent.height);
+	}
+
+	VkSwapchainCreateInfoKHR createInfo = { 0 };
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	createInfo.surface = surface;
+	createInfo.minImageCount = imageCount;
+	createInfo.imageFormat = surfaceFormat.format;
+	createInfo.imageColorSpace = surfaceFormat.colorSpace;
+	createInfo.imageExtent = extent;
+	createInfo.imageArrayLayers = 1;
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	createInfo.preTransform = support.capabilities.currentTransform;
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	createInfo.presentMode = presentMode;
+	createInfo.clipped = VK_TRUE;
+	createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+	if(__kvf_graphics_queue_family != __kvf_present_queue_family)
+	{
+		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+		createInfo.queueFamilyIndexCount = 2;
+		createInfo.pQueueFamilyIndices = queueFamilyIndices;
+	}
+	else
+		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	checkVk(vkCreateSwapchainKHR(device, &createInfo, NULL, &swapchain));
+}
+
+void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain)
 {
 	if(swapchain == VK_NULL_HANDLE)
 		return;
