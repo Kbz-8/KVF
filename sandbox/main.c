@@ -21,6 +21,7 @@ int main(void)
 	VkDevice device = kvfCreateDefaultDevice(ph_device);
 	VkQueue graphics_queue = kvfGetDeviceQueue(device, KVF_GRAPHICS_QUEUE);
 	VkQueue present_queue = kvfGetDeviceQueue(device, KVF_PRESENT_QUEUE);
+	VkSwapchainKHR swapchain = kvfCreateSwapchain(device, ph_device, surface);
 
 	SDL_Delay(2000);
 

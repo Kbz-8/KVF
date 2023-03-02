@@ -83,6 +83,9 @@ void kvfDestroyFence(VkDevice device, VkFence fence);
 VkSemaphore kvfCreateSemaphore(VkDevice device);
 void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 
+VkSwapchainKHR kvfCreateSwapchain(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface);
+void kvfDestroySwapchain(VkDevice device, VkSwapchainKHR swapchain);
+
 #ifdef __cplusplus
 }
 #endif
@@ -455,6 +458,19 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	vkDestroySemaphore(device, semaphores, NULL);
+}
+
+VkSwapchainKHR kvfCreateSwapchain(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface)
+{
+
+}
+
+void kvfDestroySwapchain(VkDevice device, VkSwapchainKHR swapchain)
+{
+	if(swapchain == VK_NULL_HANDLE)
+		return;
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	vkDestroySwapchainKHR(device, swapchain, NULL);
 }
 
 #endif // KVF_IMPLEMENTATION
