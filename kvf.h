@@ -87,6 +87,15 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool tryVsync);
 void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain);
 
+VkImageView* kvfCreateSwapChainImageViewsKHR(VkDevice device, VkSwapchainKHR swapChain, size_t* size);
+void kvfDestroySwapChainImageViewKHR(VkDevice device, VkImageView imageView);
+
+VkFramebuffer kvfCreateFrameBuffer(VkDevice device, VkRenderPass renderPass, VkImageView swapChainImageView, VkExtent2D extent);
+void kvfDestroyFrameBuffer(VkDevice device, VkFramebuffer frameBuffer);
+
+VkRenderPass kvfCreateRenderPass(VkDevice device);
+void kvfDestroyRenderPass(VkDevice device, VkRenderPass renderPass);
+
 #ifdef __cplusplus
 }
 #endif
@@ -467,6 +476,8 @@ typedef struct
 	uint32_t presentModesCount;
 } __KvfSwapchainSupportInternal;
 
+__KvfSwapchainSupportInternal __kvf_internal_swap_chain_support = { 0 };
+
 __KvfSwapchainSupportInternal __kvfQuerySwapchainSupport(VkPhysicalDevice physical, VkSurfaceKHR surface)
 {
 	__KvfSwapchainSupportInternal support;
@@ -486,6 +497,7 @@ __KvfSwapchainSupportInternal __kvfQuerySwapchainSupport(VkPhysicalDevice physic
 		support.presentModes = KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModesCount);
 		vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModesCount, support.presentModes);
 	}
+	__kvf_internal_swap_chain_support = support;
 	return support;
 }
 
@@ -516,6 +528,8 @@ uint32_t __kvfClamp(uint32_t i, uint32_t min, uint32_t max)
 	const uint32_t t = i < min ? min : i;
 	return t > max ? max : t;
 }
+
+VkFormat __kvf_internal_swap_chain_image_format = VK_FORMAT_UNDEFINED;
 
 VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool tryVsync)
 {
@@ -563,6 +577,8 @@ VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical,
 	else
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
+	__kvf_internal_swap_chain_image_format = surfaceFormat.format;
+
 	checkVk(vkCreateSwapchainKHR(device, &createInfo, NULL, &swapchain));
 	return swapchain;
 }
@@ -573,6 +589,112 @@ void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	vkDestroySwapchainKHR(device, swapchain, NULL);
+}
+
+VkImageView* kvfCreateSwapChainImageViewsKHR(VkDevice device, VkSwapchainKHR swapChain, size_t* size)
+{
+	vkGetSwapchainImagesKHR(device, swapChain, size, NULL);
+	VkImage* images = KVF_MALLOC(sizeof(VkImage) * (*size));
+	VkImageView* views = KVF_MALLOC(sizeof(VkImageView) * (*size));
+	vkGetSwapchainImagesKHR(device, swapChain, size, images);
+
+	for(int i = 0; i < *size; i++)
+	{
+		VkImageViewCreateInfo createInfo = { 0 };
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = images[i];
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = __kvf_internal_swap_chain_image_format;
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		checkVk(vkCreateImageView(device, &createInfo, NULL, &views[i]));
+	}
+	KVF_FREE(images);
+	return views;
+}
+
+void kvfDestroySwapChainImageViewKHR(VkDevice device, VkImageView imageView)
+{
+	if(imageView == VK_NULL_HANDLE)
+		return;
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	vkDestroyImageView(device, imageView, NULL);
+}
+
+VkFramebuffer kvfCreateFrameBuffer(VkDevice device, VkRenderPass renderPass, VkImageView swapChainImageView, VkExtent2D extent)
+{
+	VkFramebuffer frameBuffer = VK_NULL_HANDLE;
+	VkImageView attachments[] = { swapChainImageView };
+
+	VkFramebufferCreateInfo framebufferInfo = { 0 };
+	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	framebufferInfo.renderPass = renderPass;
+	framebufferInfo.attachmentCount = 1;
+	framebufferInfo.pAttachments = attachments;
+	framebufferInfo.width = extent.width;
+	framebufferInfo.height = extent.height;
+	framebufferInfo.layers = 1;
+
+	checkVk(vkCreateFramebuffer(device, &framebufferInfo, NULL, &frameBuffer));
+	return frameBuffer;
+}
+
+void kvfDestroyFrameBuffer(VkDevice device, VkFramebuffer frameBuffer)
+{
+	if(frameBuffer == VK_NULL_HANDLE)
+		return;
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	vkDestroyFramebuffer(device, frameBuffer, NULL);
+}
+
+VkRenderPass kvfCreateRenderPass(VkDevice device)
+{
+	VkRenderPass renderPass = VK_NULL_HANDLE;
+
+	VkAttachmentDescription colorAttachment = { 0 };
+	colorAttachment.format = __kvf_internal_swap_chain_image_format;
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentRef = { 0 };
+	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass = { 0 };
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	VkRenderPassCreateInfo renderPassInfo = { 0 };
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = 1;
+	renderPassInfo.pAttachments = &colorAttachment;
+	renderPassInfo.subpassCount = 1;
+	renderPassInfo.pSubpasses = &subpass;
+
+	checkVk(vkCreateRenderPass(device, &renderPassInfo, NULL, &renderPass));
+	return renderPass;
+}
+
+void kvfDestroyRenderPass(VkDevice device, VkRenderPass renderPass)
+{
+	if(renderPass == VK_NULL_HANDLE)
+		return;
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	vkDestroyRenderPass(device, renderPass, NULL);
 }
 
 #endif // KVF_IMPLEMENTATION
