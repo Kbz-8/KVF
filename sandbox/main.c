@@ -15,6 +15,7 @@ int main(void)
 	SDL_Vulkan_GetInstanceExtensions(win, &ext_count, exts + 1);
 
 	VkInstance instance = kvfCreateInstance(exts, ext_count + 1);
+	free(exts);
 	
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	SDL_Vulkan_CreateSurface(win, instance, &surface);
@@ -28,7 +29,7 @@ int main(void)
 	int width, height;
 	SDL_Vulkan_GetDrawableSize(win, &width, &height);
 	VkExtent2D actualExtent = { width, height };
-	VkSwapchainKHR swapchain = kvfCreateSwapchainKHR(device, ph_device, surface, extend, true);
+	VkSwapchainKHR swapchain = kvfCreateSwapchainKHR(device, ph_device, surface, actualExtent, true);
 
 	SDL_Delay(2000);
 

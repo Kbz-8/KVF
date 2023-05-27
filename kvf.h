@@ -50,6 +50,7 @@
 #endif // KVF_IMPL_VK_NO_PROTOTYPES
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* ============================================= Prototypes ============================================= */
 
@@ -83,7 +84,7 @@ void kvfDestroyFence(VkDevice device, VkFence fence);
 VkSemaphore kvfCreateSemaphore(VkDevice device);
 void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 
-VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extend, bool tryVsync);
+VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool tryVsync);
 void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain);
 
 #ifdef __cplusplus
@@ -441,11 +442,11 @@ void kvfDestroyFence(VkDevice device, VkFence fence)
 
 VkSemaphore kvfCreateSemaphore(VkDevice device)
 {
-	VkSemaphoreCreateInfo semaphoreInfo{};
+	VkSemaphoreCreateInfo semaphoreInfo = { 0 };
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
 	VkSemaphore semaphore = VK_NULL_HANDLE;
-	checkVk(vkCreateSemaphore(Render_Core::get().getDevice().get(), &semaphoreInfo, NULL, &semaphores));
+	checkVk(vkCreateSemaphore(device, &semaphoreInfo, NULL, &semaphore));
 	return semaphore;
 }
 
@@ -454,7 +455,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 	if(semaphore == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	vkDestroySemaphore(device, semaphores, NULL);
+	vkDestroySemaphore(device, semaphore, NULL);
 }
 
 typedef struct
@@ -472,18 +473,18 @@ __KvfSwapchainSupportInternal __kvfQuerySwapchainSupport(VkPhysicalDevice physic
 
 	checkVk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &support.capabilities));
 
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formatCount, NULL);
-	if(support.formatCount != 0)
+	vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formatsCount, NULL);
+	if(support.formatsCount != 0)
 	{
-		support.formats = KVF_MALLOC(sizeof(VkSurfaceFormatKHR) * support.formatCount);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formatCount, support.formats);
+		support.formats = KVF_MALLOC(sizeof(VkSurfaceFormatKHR) * support.formatsCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formatsCount, support.formats);
 	}
 
-	vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModeCount, NULL);
-	if(support.presentModeCount != 0)
+	vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModesCount, NULL);
+	if(support.presentModesCount != 0)
 	{
-		support.presentModes = KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModeCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModeCount, support.presentModes);
+		support.presentModes = KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModesCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModesCount, support.presentModes);
 	}
 	return support;
 }
@@ -516,7 +517,7 @@ uint32_t __kvfClamp(uint32_t i, uint32_t min, uint32_t max)
 	return t > max ? max : t;
 }
 
-VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extend, bool tryVsync)
+VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool tryVsync)
 {
 	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 	__KvfSwapchainSupportInternal support = __kvfQuerySwapchainSupport(physical, surface);
@@ -530,8 +531,8 @@ VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical,
 
 	uint32_t queueFamilyIndices[] = { __kvf_graphics_queue_family, __kvf_present_queue_family };
 
-	if(capabilities.currentExtent.width != UINT32_MAX)
-		extend = support.capabilities.currentExtent;
+	if(support.capabilities.currentExtent.width != UINT32_MAX)
+		extent = support.capabilities.currentExtent;
 	else
 	{
 		extent.width = __kvfClamp(extent.width, support.capabilities.minImageExtent.width, support.capabilities.maxImageExtent.width);
@@ -563,6 +564,7 @@ VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical,
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	checkVk(vkCreateSwapchainKHR(device, &createInfo, NULL, &swapchain));
+	return swapchain;
 }
 
 void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain)
