@@ -16,13 +16,13 @@ int main(void)
 
 	VkInstance instance = kvfCreateInstance(exts, ext_count + 1);
 	free(exts);
-	
+
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	SDL_Vulkan_CreateSurface(win, instance, &surface);
-	
+
 	VkPhysicalDevice ph_device = kvfPickGoodDefaultPhysicalDevice(instance, surface);
 	VkDevice device = kvfCreateDefaultDevice(ph_device);
-	
+
 	VkQueue graphics_queue = kvfGetDeviceQueue(device, KVF_GRAPHICS_QUEUE);
 	VkQueue present_queue = kvfGetDeviceQueue(device, KVF_PRESENT_QUEUE);
 
@@ -30,9 +30,12 @@ int main(void)
 	SDL_Vulkan_GetDrawableSize(win, &width, &height);
 	VkExtent2D actualExtent = { width, height };
 	VkSwapchainKHR swapchain = kvfCreateSwapchainKHR(device, ph_device, surface, actualExtent, true);
+	size_t image_views_number;
+	VkImageView* swapchain_image_views = kvfCreateSwapChainImageViewsKHR(device, swapchain, &image_views_number);
 
 	SDL_Delay(2000);
 
+	kvfDestroySwapChainImageViewsKHR(device, swapchain_image_views, image_views_number);
 	kvfDestroySwapchainKHR(device, swapchain);
 	vkDestroySurfaceKHR(instance, surface, NULL);
 	kvfDestroyDevice(device);

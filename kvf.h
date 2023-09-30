@@ -88,13 +88,16 @@ VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical,
 void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain);
 
 VkImageView* kvfCreateSwapChainImageViewsKHR(VkDevice device, VkSwapchainKHR swapChain, size_t* size);
-void kvfDestroySwapChainImageViewKHR(VkDevice device, VkImageView imageView);
+void kvfDestroySwapChainImageViewsKHR(VkDevice device, VkImageView* imageView, size_t size);
 
 VkFramebuffer kvfCreateFrameBuffer(VkDevice device, VkRenderPass renderPass, VkImageView swapChainImageView, VkExtent2D extent);
 void kvfDestroyFrameBuffer(VkDevice device, VkFramebuffer frameBuffer);
 
 VkRenderPass kvfCreateRenderPass(VkDevice device);
 void kvfDestroyRenderPass(VkDevice device, VkRenderPass renderPass);
+
+VkShaderModule kvfCreateShaderModule(VkDevice device, uint32_t* code, size_t size);
+void kvfDestroyShaderModule(VkDevice device, VkSahderModule shader);
 
 #ifdef __cplusplus
 }
@@ -162,11 +165,14 @@ const char* verbaliseResultVk(VkResult result)
 	}
 }
 
-void checkVk(VkResult result)
+void checkVk(VkResult result const char* function)
 {
 	if(result != VK_SUCCESS)
-		printf("KVF Vulkan error : %s\n", verbaliseResultVk(result));
+		printf("KVF Vulkan error in '%s': %s\n", function, verbaliseResultVk(result));
 }
+
+#undef checkVk
+#define checkVK(res) checkVk(res, __FUNCTION__)
 
 #ifdef KVF_ENABLE_VALIDATION_LAYERS
 	bool __kvfCheckValidationLayerSupport()
@@ -418,6 +424,7 @@ void kvfDestroyDevice(VkDevice device)
 
 VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue)
 {
+	KVF_ASSERT(device != VK_NULL_HANDLE);
 	KVF_ASSERT(__kvf_graphics_queue_family != -1);
 	KVF_ASSERT(__kvf_present_queue_family != -1);
 
@@ -432,6 +439,7 @@ VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue)
 
 VkFence kvfCreateFence(VkDevice device)
 {
+	KVF_ASSERT(device != VK_NULL_HANDLE);
 	VkFenceCreateInfo fenceInfo = { 0 };
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -451,6 +459,7 @@ void kvfDestroyFence(VkDevice device, VkFence fence)
 
 VkSemaphore kvfCreateSemaphore(VkDevice device)
 {
+	KVF_ASSERT(device != VK_NULL_HANDLE);
 	VkSemaphoreCreateInfo semaphoreInfo = { 0 };
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
@@ -533,6 +542,7 @@ VkFormat __kvf_internal_swap_chain_image_format = VK_FORMAT_UNDEFINED;
 
 VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool tryVsync)
 {
+	KVF_ASSERT(device != VK_NULL_HANDLE);
 	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 	__KvfSwapchainSupportInternal support = __kvfQuerySwapchainSupport(physical, surface);
 
@@ -593,6 +603,7 @@ void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain)
 
 VkImageView* kvfCreateSwapChainImageViewsKHR(VkDevice device, VkSwapchainKHR swapChain, size_t* size)
 {
+	KVF_ASSERT(device != VK_NULL_HANDLE);
 	vkGetSwapchainImagesKHR(device, swapChain, size, NULL);
 	VkImage* images = KVF_MALLOC(sizeof(VkImage) * (*size));
 	VkImageView* views = KVF_MALLOC(sizeof(VkImageView) * (*size));
@@ -621,16 +632,18 @@ VkImageView* kvfCreateSwapChainImageViewsKHR(VkDevice device, VkSwapchainKHR swa
 	return views;
 }
 
-void kvfDestroySwapChainImageViewKHR(VkDevice device, VkImageView imageView)
+void kvfDestroySwapChainImageViewsKHR(VkDevice device, VkImageView* imageView, size_t size)
 {
-	if(imageView == VK_NULL_HANDLE)
+	if(imageView == NULL)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	vkDestroyImageView(device, imageView, NULL);
+	for(int i = 0; i < size; i++)
+		vkDestroyImageView(device, imageView[i], NULL);
 }
 
 VkFramebuffer kvfCreateFrameBuffer(VkDevice device, VkRenderPass renderPass, VkImageView swapChainImageView, VkExtent2D extent)
 {
+	KVF_ASSERT(device != VK_NULL_HANDLE);
 	VkFramebuffer frameBuffer = VK_NULL_HANDLE;
 	VkImageView attachments[] = { swapChainImageView };
 
@@ -657,6 +670,7 @@ void kvfDestroyFrameBuffer(VkDevice device, VkFramebuffer frameBuffer)
 
 VkRenderPass kvfCreateRenderPass(VkDevice device)
 {
+	KVF_ASSERT(device != VK_NULL_HANDLE);
 	VkRenderPass renderPass = VK_NULL_HANDLE;
 
 	VkAttachmentDescription colorAttachment = { 0 };
@@ -695,6 +709,26 @@ void kvfDestroyRenderPass(VkDevice device, VkRenderPass renderPass)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	vkDestroyRenderPass(device, renderPass, NULL);
+}
+
+VkShaderModule kvfCreateShaderModule(VkDevice device, uint32_t* code, size_t size)
+{
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	VkShaderModuleCreateInfo createInfo = { 0 };
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = size * sizeof(uint32_t);
+	createInfo.pCode = code;
+	VkShaderModule shader = VK_NULL_HANDLE;
+	checkVk(vkCreateShaderModule(device, &createInfo, NULL, &shader));
+	return shader;
+}
+
+void kvfDestroyShaderModule(VkDevice device, VkSahderModule shader)
+{
+	if(shader == VK_NULL_HANDLE)
+		return;
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	vkDestroyShaderModule(device, shader, NULL);
 }
 
 #endif // KVF_IMPLEMENTATION
