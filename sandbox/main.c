@@ -10,7 +10,7 @@ int main(void)
 	SDL_Window* win = SDL_CreateWindow("KVF Sandbox", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 600, 400, SDL_WINDOW_VULKAN);
 	uint32_t ext_count;
 	SDL_Vulkan_GetInstanceExtensions(win, &ext_count, NULL);
-	const char** exts = malloc(sizeof(char*) * (ext_count + 1));
+	const char** exts = (const char**)malloc(sizeof(char*) * (ext_count + 1));
 	exts[0] = VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
 	SDL_Vulkan_GetInstanceExtensions(win, &ext_count, exts + 1);
 
@@ -28,7 +28,7 @@ int main(void)
 
 	int width, height;
 	SDL_Vulkan_GetDrawableSize(win, &width, &height);
-	VkExtent2D actualExtent = { width, height };
+	VkExtent2D actualExtent = { (uint32_t)width, (uint32_t)height };
 	VkSwapchainKHR swapchain = kvfCreateSwapchainKHR(device, ph_device, surface, actualExtent, true);
 	size_t image_views_number;
 	VkImageView* swapchain_image_views = kvfCreateSwapChainImageViewsKHR(device, swapchain, &image_views_number);
