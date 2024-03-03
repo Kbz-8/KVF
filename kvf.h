@@ -48,8 +48,6 @@
 #ifndef KBZ_8_VULKAN_FRAMEWORK_H
 #define KBZ_8_VULKAN_FRAMEWORK_H
 
-#include <cstdint>
-#include <vulkan/vulkan_core.h>
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
 	#define VK_NO_PROTOTYPES
 #endif
