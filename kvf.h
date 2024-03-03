@@ -1105,7 +1105,7 @@ VkAttachmentDescription kvfBuildAttachmentDescription(KvfImageType type, VkForma
 		default:
 		{
 			fprintf(stderr, "KVF Attachment Description builder : unsupported image type");
-			return {};
+			return attachment;
 		}
 	}
 
