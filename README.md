@@ -3,7 +3,7 @@
 KVF (kbz_8 vulkan framework) is a lightweight single-header Vulkan framework written in C99 to simplify the creation of Vulkan applications.
 It is designed to be a drop in framework inside any existing Vulkan renderer as it does not use any custom types of structs (except for the graphics pipeline builder).
 
-Here's a simple C example of a hello world triangle using KVF and SDL2:
+Here's a simple C example of a hello world triangle using KVF and SDL2 :
 ```C
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_timer.h>
@@ -152,3 +152,7 @@ int main(void)
 }
 
 ```
+
+<p align="center">
+    <img src="https://raw.githubusercontent.com/Kbz-8/KVF/main/Sandbox/screenshot.png" alt="drawing" width="500"/>
+</p>
