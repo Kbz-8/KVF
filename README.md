@@ -154,5 +154,5 @@ int main(void)
 ```
 
 <p align="center">
-    <img src="https://raw.githubusercontent.com/Kbz-8/KVF/main/Sandbox/screenshot.png" alt="drawing" width="500"/>
+    <img src="https://github.com/Kbz-8/KVF/blob/46aa29be4facef398aeab0b7e82bff84aab683ce/sandbox/screenshot.png" alt="drawing" width="500"/>
 </p>
