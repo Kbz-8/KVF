@@ -120,7 +120,7 @@ VkExtent2D kvfGetSwapchainImagesSize(VkSwapchainKHR swapchain);
 void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain);
 
 VkImage kvfCreateImage(VkDevice device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, KvfImageType type);
-void kvfImageToBuffer(VkCommandBuffer cmd, VkBuffer dst, VkImage src, size_t size);
+void kvfImageToBuffer(VkCommandBuffer cmd, VkBuffer dst, VkImage src, size_t buffer_offset, VkImageAspectFlagBits aspect, VkExtent3D extent);
 void kvfDestroyImage(VkDevice device, VkImage image);
 VkImageView kvfCreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageViewType type, VkImageAspectFlags aspect, int layer_count);
 void kvfDestroyImageView(VkDevice device, VkImageView image_view);
@@ -1564,7 +1564,7 @@ void kvfImageToBuffer(VkCommandBuffer cmd, VkBuffer dst, VkImage src, size_t buf
 	region.imageSubresource.layerCount = 1;
 	region.imageOffset = offset;
 	region.imageExtent = extent;
-	vkCmdCopyImageToBuffer(cmd, src, dst, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 1, &region);
+	vkCmdCopyImageToBuffer(cmd, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst, 1, &region);
 }
 
 void kvfDestroyImage(VkDevice device, VkImage image)

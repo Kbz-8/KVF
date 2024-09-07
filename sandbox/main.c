@@ -90,8 +90,8 @@ int main(void)
 	for(uint32_t i = 0; i < swapchain_images_count; i++)
 	{
 		VkCommandBuffer cmd = kvfCreateCommandBuffer(device);
-		kvfTransitionImageLayout(device, swapchain_images[i], cmd, kvfGetSwapchainImagesFormat(swapchain), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, true);
-		swapchain_images_views[i] = kvfCreateImageView(device, swapchain_images[i], kvfGetSwapchainImagesFormat(swapchain), VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT);
+		kvfTransitionImageLayout(device, swapchain_images[i], KVF_IMAGE_COLOR, cmd, kvfGetSwapchainImagesFormat(swapchain), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, true);
+		swapchain_images_views[i] = kvfCreateImageView(device, swapchain_images[i], kvfGetSwapchainImagesFormat(swapchain), VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 	}
 
 	// Sync objects creation
@@ -118,6 +118,7 @@ int main(void)
 	kvfGPipelineBuilderSetInputTopology(builder, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	kvfGPipelineBuilderSetPolygonMode(builder, VK_POLYGON_MODE_FILL, 1.0f);
 	kvfGPipelineBuilderSetCullMode(builder, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	kvfGPipelineBuilderSetMultisampling(builder, VK_SAMPLE_COUNT_1_BIT);
 	kvfGPipelineBuilderAddShaderStage(builder, VK_SHADER_STAGE_VERTEX_BIT, vertex_shader_module, "main");
 	kvfGPipelineBuilderAddShaderStage(builder, VK_SHADER_STAGE_FRAGMENT_BIT, fragment_shader_module, "main");
 	kvfGPipelineBuilderDisableDepthTest(builder);
