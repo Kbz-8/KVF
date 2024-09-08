@@ -1378,11 +1378,20 @@ VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue)
 	KVF_ASSERT(kvfdevice != NULL);
 	VkQueue vk_queue = VK_NULL_HANDLE;
 	if(queue == KVF_GRAPHICS_QUEUE)
+	{
+		KVF_ASSERT(kvfdevice->queues.graphics != -1);
 		vkGetDeviceQueue(device, kvfdevice->queues.graphics, 0, &vk_queue);
+	}
 	else if(queue == KVF_PRESENT_QUEUE)
+	{
+		KVF_ASSERT(kvfdevice->queues.present != -1);
 		vkGetDeviceQueue(device, kvfdevice->queues.present, 0, &vk_queue);
+	}
 	else if(queue == KVF_COMPUTE_QUEUE)
+	{
+		KVF_ASSERT(kvfdevice->queues.compute != -1);
 		vkGetDeviceQueue(device, kvfdevice->queues.compute, 0, &vk_queue);
+	}
 	return vk_queue;
 }
 
