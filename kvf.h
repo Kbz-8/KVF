@@ -1278,8 +1278,6 @@ VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uin
 	__KvfDevice* kvfdevice = __kvfGetKvfDeviceFromVkPhysicalDevice(physical);
 
 	KVF_ASSERT(kvfdevice != NULL);
-	KVF_ASSERT(kvfdevice->queues.graphics != -1);
-	KVF_ASSERT(kvfdevice->queues.present != -1);
 
 	VkDeviceQueueCreateInfo queue_create_info[2];
 	queue_create_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -1325,21 +1323,15 @@ VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 {
 	const float queue_priority = 1.0f;
 
-	__KvfDevice* kvfdevice = __kvfGetKvfDeviceFromVkPhysicalDevice(physical);
-
-	KVF_ASSERT(kvfdevice != NULL);
-	KVF_ASSERT(kvfdevice->queues.graphics != -1);
-	KVF_ASSERT(kvfdevice->queues.present != -1);
-
 	VkDeviceQueueCreateInfo queue_create_info[2];
 	queue_create_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queue_create_info[0].queueFamilyIndex = kvfdevice->queues.graphics;
+	queue_create_info[0].queueFamilyIndex = graphics;
 	queue_create_info[0].queueCount = 1;
 	queue_create_info[0].pQueuePriorities = &queue_priority;
 	queue_create_info[0].flags = 0;
 	queue_create_info[0].pNext = NULL;
 	queue_create_info[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queue_create_info[1].queueFamilyIndex = kvfdevice->queues.present;
+	queue_create_info[1].queueFamilyIndex = present;
 	queue_create_info[1].queueCount = 1;
 	queue_create_info[1].pQueuePriorities = &queue_priority;
 	queue_create_info[1].flags = 0;
@@ -1347,7 +1339,7 @@ VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 
 	VkDeviceCreateInfo createInfo;
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.queueCreateInfoCount = (kvfdevice->queues.graphics == kvfdevice->queues.present ? 1 : 2);
+	createInfo.queueCreateInfoCount = (graphics == present ? 1 : 2);
 	createInfo.pQueueCreateInfos = queue_create_info;
 	createInfo.pEnabledFeatures = features;
 	createInfo.enabledExtensionCount = extensions_count;
