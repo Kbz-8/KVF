@@ -89,13 +89,13 @@ void kvfSetValidationWarningCallback(KvfErrorCallback callback);
 
 void kvfAddLayer(const char* layer);
 
-VkInstance kvfCreateInstance(const char** extensionsEnabled, uint32_t extensionsCount);
+VkInstance kvfCreateInstance(const char** extensions_enabled, uint32_t extensions_count);
 void kvfDestroyInstance(VkInstance instance);
 
 // If surfaces given to theses functions are VK_NULL_HANDLE no present queues will be searched and thus kvfQueuePresentKHR will not work
 VkPhysicalDevice kvfPickFirstPhysicalDevice(VkInstance instance, VkSurfaceKHR surface);
 VkPhysicalDevice kvfPickGoodDefaultPhysicalDevice(VkInstance instance, VkSurfaceKHR surface);
-VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR surface, const char** deviceExtensions, uint32_t deviceExtensionsCount);
+VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR surface, const char** device_extensions, uint32_t device_extensions_count);
 
 VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue);
 uint32_t kvfGetDeviceQueueFamily(VkDevice device, KvfQueueType queue);
@@ -103,6 +103,8 @@ bool kvfQueuePresentKHR(VkDevice device, VkSemaphore wait, VkSwapchainKHR swapch
 
 VkDevice kvfCreateDefaultDevice(VkPhysicalDevice physical);
 VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uint32_t extensions_count, VkPhysicalDeviceFeatures* features);
+VkDevice kvfCreateDefaultDevicePhysicalDeviceAndCustomQueues(VkPhysicalDevice physical, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue);
+VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical, const char** extensions, uint32_t extensions_count, VkPhysicalDeviceFeatures* features, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue);
 void kvfDestroyDevice(VkDevice device);
 
 VkFence kvfCreateFence(VkDevice device);
@@ -112,7 +114,7 @@ void kvfDestroyFence(VkDevice device, VkFence fence);
 VkSemaphore kvfCreateSemaphore(VkDevice device);
 void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 
-VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool tryVsync);
+VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync);
 VkFormat kvfGetSwapchainImagesFormat(VkSwapchainKHR swapchain);
 uint32_t kvfGetSwapchainImagesCount(VkSwapchainKHR swapchain);
 uint32_t kvfGetSwapchainMinImagesCount(VkSwapchainKHR swapchain);
@@ -213,6 +215,10 @@ void kvfCheckVk(VkResult result);
 
 #ifdef KVF_IMPLEMENTATION
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef KVF_MALLOC
 	#define KVF_MALLOC(x) malloc(x)
 #endif
@@ -265,8 +271,8 @@ typedef struct
 	VkSurfaceCapabilitiesKHR capabilities;
 	VkSurfaceFormatKHR* formats;
 	VkPresentModeKHR* presentModes;
-	uint32_t formatsCount;
-	uint32_t presentModesCount;
+	uint32_t formats_count;
+	uint32_t presentModes_count;
 } __KvfSwapchainSupportInternal;
 
 typedef struct
@@ -346,7 +352,7 @@ void kvfCheckVk(VkResult result)
 	__kvfCheckVk(result);
 }
 
-void __kvfAddDeviceToArray(VkPhysicalDevice device, int32_t graphics_queue, int32_t present_queue)
+void __kvfAddDeviceToArray(VkPhysicalDevice device, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	if(__kvf_internal_devices_size == __kvf_internal_devices_capacity)
@@ -358,6 +364,7 @@ void __kvfAddDeviceToArray(VkPhysicalDevice device, int32_t graphics_queue, int3
 
 	__kvf_internal_devices[__kvf_internal_devices_size].physical = device;
 	__kvf_internal_devices[__kvf_internal_devices_size].queues.graphics = graphics_queue;
+	__kvf_internal_devices[__kvf_internal_devices_size].queues.compute = compute_queue;
 	__kvf_internal_devices[__kvf_internal_devices_size].queues.present = present_queue;
 	__kvf_internal_devices_size++;
 }
@@ -366,6 +373,36 @@ void __kvfCompleteDevice(VkPhysicalDevice physical, VkDevice device)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	KVF_ASSERT(physical != VK_NULL_HANDLE);
+
+	__KvfDevice* kvf_device = NULL;
+
+	for(size_t i = 0; i < __kvf_internal_devices_size; i++)
+	{
+		if(__kvf_internal_devices[i].physical == physical)
+			kvf_device = &__kvf_internal_devices[i];
+	}
+
+	KVF_ASSERT(kvf_device != NULL);
+
+	VkCommandPool pool;
+	VkCommandPoolCreateInfo pool_info = {};
+	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	pool_info.queueFamilyIndex = kvf_device->queues.graphics;
+	__kvfCheckVk(vkCreateCommandPool(device, &pool_info, NULL, &pool));
+
+	kvf_device->device = device;
+	kvf_device->cmd_pool = pool;
+	kvf_device->sets_pools = NULL;
+	kvf_device->sets_pools_size = 0;
+}
+
+void __kvfCompleteDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical, VkDevice device, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue)
+{
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	KVF_ASSERT(physical != VK_NULL_HANDLE);
+
+	__kvfAddDeviceToArray(physical, graphics_queue, present_queue, compute_queue);
 
 	__KvfDevice* kvf_device = NULL;
 
@@ -1113,14 +1150,14 @@ VkPhysicalDevice kvfPickFirstPhysicalDevice(VkInstance instance, VkSurfaceKHR su
 	VkPhysicalDevice chosen_one = VK_NULL_HANDLE;
 
 	KVF_ASSERT(instance != VK_NULL_HANDLE);
-	
+
 	vkEnumeratePhysicalDevices(instance, &device_count, NULL);
 	devices = (VkPhysicalDevice*)KVF_MALLOC(sizeof(VkPhysicalDevice) * device_count + 1);
 	vkEnumeratePhysicalDevices(instance, &device_count, devices);
 	chosen_one = devices[0];
 	KVF_FREE(devices);
 	__KvfQueueFamilies queues = __kvfFindQueueFamilies(chosen_one, surface);
-	__kvfAddDeviceToArray(chosen_one, queues.graphics, queues.present);
+	__kvfAddDeviceToArray(chosen_one, queues.graphics, queues.present, queues.present);
 	return chosen_one;
 }
 
@@ -1130,21 +1167,21 @@ VkPhysicalDevice kvfPickGoodDefaultPhysicalDevice(VkInstance instance, VkSurface
 	return kvfPickGoodPhysicalDevice(instance, surface, extensions, sizeof(extensions) / sizeof(extensions[0]));
 }
 
-int32_t __kvfScorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR surface, const char** deviceExtensions, uint32_t deviceExtensionsCount)
+int32_t __kvfScorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR surface, const char** device_extensions, uint32_t device_extensions_count)
 {
-	/* Check Extensions Support */
+	/* Check _extensions Support */
 	uint32_t extension_count;
 	vkEnumerateDeviceExtensionProperties(device, NULL, &extension_count, NULL);
 	VkExtensionProperties* props = (VkExtensionProperties*)KVF_MALLOC(sizeof(VkExtensionProperties) * extension_count + 1);
 	vkEnumerateDeviceExtensionProperties(device, NULL, &extension_count, props);
 
 	bool are_there_required_device_extensions = true;
-	for(int j = 0; j < deviceExtensionsCount; j++)
+	for(int j = 0; j < device_extensions_count; j++)
 	{
 		bool is_there_extension = false;
 		for(int k = 0; k < extension_count; k++)
 		{
-			if(strcmp(deviceExtensions[j], props[k].extensionName) == 0)
+			if(strcmp(device_extensions[j], props[k].extensionName) == 0)
 			{
 				is_there_extension = true;
 				break;
@@ -1190,7 +1227,7 @@ int32_t __kvfScorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR surface, 
 	return score;
 }
 
-VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR surface, const char** deviceExtensions, uint32_t deviceExtensionsCount)
+VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR surface, const char** device_extensions, uint32_t device_extensions_count)
 {
 	VkPhysicalDevice* devices = NULL;
 	VkPhysicalDevice chosen_one = VK_NULL_HANDLE;
@@ -1206,7 +1243,7 @@ VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR sur
 
 	for(int i = 0; i < device_count; i++)
 	{
-		int32_t current_device_score = __kvfScorePhysicalDevice(devices[i], surface, deviceExtensions, deviceExtensionsCount);
+		int32_t current_device_score = __kvfScorePhysicalDevice(devices[i], surface, device_extensions, device_extensions_count);
 		if(current_device_score > best_device_score)
 		{
 			best_device_score = current_device_score;
@@ -1217,7 +1254,7 @@ VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR sur
 	if(chosen_one != VK_NULL_HANDLE)
 	{
 		__KvfQueueFamilies queues = __kvfFindQueueFamilies(chosen_one, surface);
-		__kvfAddDeviceToArray(chosen_one, queues.graphics, queues.present);
+		__kvfAddDeviceToArray(chosen_one, queues.graphics, queues.present, queues.compute);
 		return chosen_one;
 	}
 	return VK_NULL_HANDLE;
@@ -1269,6 +1306,56 @@ VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uin
 	VkDevice device;
 	__kvfCheckVk(vkCreateDevice(physical, &createInfo, NULL, &device));
 	__kvfCompleteDevice(physical, device);
+
+	return device;
+}
+
+VkDevice kvfCreateDefaultDevicePhysicalDeviceAndCustomQueues(VkPhysicalDevice physical, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue)
+{
+	const char* extensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	VkPhysicalDeviceFeatures device_features = { VK_FALSE };
+	return kvfCreateDeviceCustomPhysicalDeviceAndQueues(physical, extensions, sizeof(extensions) / sizeof(extensions[0]), &device_features, graphics_queue, present_queue, compute_queue);
+}
+
+VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical, const char** extensions, uint32_t extensions_count, VkPhysicalDeviceFeatures* features, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue)
+{
+	const float queue_priority = 1.0f;
+
+	__KvfDevice* kvfdevice = __kvfGetKvfDeviceFromVkPhysicalDevice(physical);
+
+	KVF_ASSERT(kvfdevice != NULL);
+	KVF_ASSERT(kvfdevice->queues.graphics != -1);
+	KVF_ASSERT(kvfdevice->queues.present != -1);
+
+	VkDeviceQueueCreateInfo queue_create_info[2];
+	queue_create_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queue_create_info[0].queueFamilyIndex = kvfdevice->queues.graphics;
+	queue_create_info[0].queueCount = 1;
+	queue_create_info[0].pQueuePriorities = &queue_priority;
+	queue_create_info[0].flags = 0;
+	queue_create_info[0].pNext = NULL;
+	queue_create_info[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queue_create_info[1].queueFamilyIndex = kvfdevice->queues.present;
+	queue_create_info[1].queueCount = 1;
+	queue_create_info[1].pQueuePriorities = &queue_priority;
+	queue_create_info[1].flags = 0;
+	queue_create_info[1].pNext = NULL;
+
+	VkDeviceCreateInfo createInfo;
+	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.queueCreateInfoCount = (kvfdevice->queues.graphics == kvfdevice->queues.present ? 1 : 2);
+	createInfo.pQueueCreateInfos = queue_create_info;
+	createInfo.pEnabledFeatures = features;
+	createInfo.enabledExtensionCount = extensions_count;
+	createInfo.ppEnabledExtensionNames = extensions;
+	createInfo.enabledLayerCount = 0;
+	createInfo.ppEnabledLayerNames = NULL;
+	createInfo.flags = 0;
+	createInfo.pNext = NULL;
+
+	VkDevice device;
+	__kvfCheckVk(vkCreateDevice(physical, &createInfo, NULL, &device));
+	__kvfCompleteDeviceCustomPhysicalDeviceAndQueues(physical, device, graphics_queue, present_queue, compute_queue);
 
 	return device;
 }
@@ -1379,25 +1466,25 @@ __KvfSwapchainSupportInternal __kvfQuerySwapchainSupport(VkPhysicalDevice physic
 
 	__kvfCheckVk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &support.capabilities));
 
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formatsCount, NULL);
-	if(support.formatsCount != 0)
+	vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formats_count, NULL);
+	if(support.formats_count != 0)
 	{
-		support.formats = (VkSurfaceFormatKHR*)KVF_MALLOC(sizeof(VkSurfaceFormatKHR) * support.formatsCount);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formatsCount, support.formats);
+		support.formats = (VkSurfaceFormatKHR*)KVF_MALLOC(sizeof(VkSurfaceFormatKHR) * support.formats_count);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formats_count, support.formats);
 	}
 
-	vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModesCount, NULL);
-	if(support.presentModesCount != 0)
+	vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModes_count, NULL);
+	if(support.presentModes_count != 0)
 	{
-		support.presentModes = (VkPresentModeKHR*)KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModesCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModesCount, support.presentModes);
+		support.presentModes = (VkPresentModeKHR*)KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModes_count);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModes_count, support.presentModes);
 	}
 	return support;
 }
 
 VkSurfaceFormatKHR __kvfChooseSwapSurfaceFormat(__KvfSwapchainSupportInternal* support)
 {
-	for(int i = 0; i < support->formatsCount; i++)
+	for(int i = 0; i < support->formats_count; i++)
 	{
 		if(support->formats[i].format == VK_FORMAT_R8G8B8A8_SRGB && support->formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
 			return support->formats[i];
@@ -1405,11 +1492,11 @@ VkSurfaceFormatKHR __kvfChooseSwapSurfaceFormat(__KvfSwapchainSupportInternal* s
 	return support->formats[0];
 }
 
-VkPresentModeKHR __kvfChooseSwapPresentMode(__KvfSwapchainSupportInternal* support, bool tryVsync)
+VkPresentModeKHR __kvfChooseSwapPresentMode(__KvfSwapchainSupportInternal* support, bool try_vsync)
 {
-	if(tryVsync == false)
+	if(try_vsync == false)
 		return VK_PRESENT_MODE_IMMEDIATE_KHR;
-	for(int i = 0; i < support->presentModesCount; i++)
+	for(int i = 0; i < support->presentModes_count; i++)
 	{
 		if(support->presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
 			return support->presentModes[i];
@@ -1423,23 +1510,23 @@ uint32_t __kvfClamp(uint32_t i, uint32_t min, uint32_t max)
 	return t > max ? max : t;
 }
 
-VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool tryVsync)
+VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	VkSwapchainKHR swapchain;
 	__KvfSwapchainSupportInternal support = __kvfQuerySwapchainSupport(physical, surface);
 
 	VkSurfaceFormatKHR surfaceFormat = __kvfChooseSwapSurfaceFormat(&support);
-	VkPresentModeKHR presentMode = __kvfChooseSwapPresentMode(&support, tryVsync);
+	VkPresentModeKHR presentMode = __kvfChooseSwapPresentMode(&support, try_vsync);
 
-	uint32_t imageCount = support.capabilities.minImageCount + 1;
-	if(support.capabilities.maxImageCount > 0 && imageCount > support.capabilities.maxImageCount)
-		imageCount = support.capabilities.maxImageCount;
+	uint32_t image_count = support.capabilities.minImageCount + 1;
+	if(support.capabilities.maxImageCount > 0 && image_count > support.capabilities.maxImageCount)
+		image_count = support.capabilities.maxImageCount;
 
 	__KvfDevice* kvfdevice = __kvfGetKvfDeviceFromVkDevice(device);
 	KVF_ASSERT(kvfdevice != NULL);
 
-	uint32_t queueFamilyIndices[] = { (uint32_t)kvfdevice->queues.graphics, (uint32_t)kvfdevice->queues.present };
+	uint32_t queue_family_indices[] = { (uint32_t)kvfdevice->queues.graphics, (uint32_t)kvfdevice->queues.present };
 
 	if(support.capabilities.currentExtent.width != UINT32_MAX)
 		extent = support.capabilities.currentExtent;
@@ -1452,7 +1539,7 @@ VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical,
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	createInfo.surface = surface;
-	createInfo.minImageCount = imageCount;
+	createInfo.minImageCount = image_count;
 	createInfo.imageFormat = surfaceFormat.format;
 	createInfo.imageColorSpace = surfaceFormat.colorSpace;
 	createInfo.imageExtent = extent;
@@ -1468,7 +1555,7 @@ VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical,
 	{
 		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
 		createInfo.queueFamilyIndexCount = 2;
-		createInfo.pQueueFamilyIndices = queueFamilyIndices;
+		createInfo.pQueueFamilyIndices = queue_family_indices;
 	}
 	else
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -2398,5 +2485,9 @@ void kvfDestroyPipeline(VkDevice device, VkPipeline pipeline)
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	vkDestroyPipeline(device, pipeline, NULL);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // KVF_IMPLEMENTATION
