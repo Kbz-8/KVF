@@ -101,6 +101,10 @@ VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue);
 uint32_t kvfGetDeviceQueueFamily(VkDevice device, KvfQueueType queue);
 bool kvfQueuePresentKHR(VkDevice device, VkSemaphore wait, VkSwapchainKHR swapchain, uint32_t image_index); // return false when the swapchain must be recreated
 
+// Meant to be used when creating a VkDevice with a custom VkPhysicalDevice
+int32_t kvfFindDeviceQueueFamily(VkPhysicalDevice physical, KvfQueueType type); // This function cannot find present queue
+int32_t kvfFindDeviceQueueFamilyKHR(VkPhysicalDevice physical, VkSurfaceKHR surface, KvfQueueType type); // This one can find present queue
+
 VkDevice kvfCreateDefaultDevice(VkPhysicalDevice physical);
 VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uint32_t extensions_count, VkPhysicalDeviceFeatures* features);
 VkDevice kvfCreateDefaultDevicePhysicalDeviceAndCustomQueues(VkPhysicalDevice physical, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue);
@@ -1414,6 +1418,68 @@ bool kvfQueuePresentKHR(VkDevice device, VkSemaphore wait, VkSwapchainKHR swapch
 	else
 		__kvfCheckVk(result);
 	return true;
+}
+
+int32_t kvfFindDeviceQueueFamily(VkPhysicalDevice physical, KvfQueueType type)
+{
+	KVF_ASSERT(physical != VK_NULL_HANDLE);
+	KVF_ASSERT(type != KVF_PRESENT_QUEUE && "Use kvfFindDeviceQueueFamilyKHR to find present queue");
+
+	uint32_t queue_family_count;
+	vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, NULL);
+	VkQueueFamilyProperties* queue_families = (VkQueueFamilyProperties*)KVF_MALLOC(sizeof(VkQueueFamilyProperties) * queue_family_count);
+	vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, queue_families);
+
+	int32_t queue = -1;
+
+	for(int i = 0; i < queue_family_count; i++)
+	{
+		if(type == KVF_COMPUTE_QUEUE)
+		{
+			if(queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT && (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
+				queue = i;
+			else if(queue != -1 && queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) // else just find a compute queue
+				queue = i;
+		}
+		else if(type == KVF_GRAPHICS_QUEUE)
+		{
+			if(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+				queue = i;
+		}
+
+		if(queue != -1)
+			break;
+	}
+	KVF_FREE(queue_families);
+	return queue;
+}
+
+int32_t kvfFindDeviceQueueFamilyKHR(VkPhysicalDevice physical, VkSurfaceKHR surface, KvfQueueType type)
+{
+	KVF_ASSERT(physical != VK_NULL_HANDLE);
+	KVF_ASSERT(surface != VK_NULL_HANDLE);
+
+	if(type != KVF_PRESENT_QUEUE)
+		return kvfFindDeviceQueueFamily(physical, type);
+
+	uint32_t queue_family_count;
+	vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, NULL);
+	VkQueueFamilyProperties* queue_families = (VkQueueFamilyProperties*)KVF_MALLOC(sizeof(VkQueueFamilyProperties) * queue_family_count);
+	vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, queue_families);
+
+	int32_t queue = -1;
+
+	for(int i = 0; i < queue_family_count; i++)
+	{
+		VkBool32 present_support = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present_support);
+		if(present_support)
+			queue = i;
+		if(queue != -1)
+			break;
+	}
+	KVF_FREE(queue_families);
+	return queue;
 }
 
 VkFence kvfCreateFence(VkDevice device)
