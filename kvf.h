@@ -1173,7 +1173,7 @@ VkPhysicalDevice kvfPickGoodDefaultPhysicalDevice(VkInstance instance, VkSurface
 
 int32_t __kvfScorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR surface, const char** device_extensions, uint32_t device_extensions_count)
 {
-	/* Check _extensions Support */
+	/* Check extensions support */
 	uint32_t extension_count;
 	vkEnumerateDeviceExtensionProperties(device, NULL, &extension_count, NULL);
 	VkExtensionProperties* props = (VkExtensionProperties*)KVF_MALLOC(sizeof(VkExtensionProperties) * extension_count + 1);
@@ -1203,14 +1203,17 @@ int32_t __kvfScorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR surface, 
 
 	/* Check Queue Families Support */
 	__KvfQueueFamilies queues = __kvfFindQueueFamilies(device, surface);
-	if(queues.graphics == -1 || queues.present == -1)
+	if(queues.graphics == -1 || (surface != VK_NULL_HANDLE && queues.present == -1))
 		return -1;
 
-	/* Check Surface Formats Counts */
-	uint32_t format_count;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, NULL);
-	if(format_count == 0)
-		return -1;
+	if(surface != VK_NULL_HANDLE)
+	{
+		/* Check surface formats counts */
+		uint32_t format_count;
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, NULL);
+		if(format_count == 0)
+			return -1;
+	}
 
 	VkPhysicalDeviceProperties device_props;
 	vkGetPhysicalDeviceProperties(device, &device_props);
@@ -1239,7 +1242,6 @@ VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR sur
 	int32_t best_device_score = -1;
 
 	KVF_ASSERT(instance != VK_NULL_HANDLE);
-	KVF_ASSERT(surface != VK_NULL_HANDLE);
 
 	vkEnumeratePhysicalDevices(instance, &device_count, NULL);
 	devices = (VkPhysicalDevice*)KVF_MALLOC(sizeof(VkPhysicalDevice) * device_count + 1);
