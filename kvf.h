@@ -219,10 +219,6 @@ void kvfCheckVk(VkResult result);
 
 #ifdef KVF_IMPLEMENTATION
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifndef KVF_MALLOC
 	#define KVF_MALLOC(x) malloc(x)
 #endif
@@ -389,7 +385,7 @@ void __kvfCompleteDevice(VkPhysicalDevice physical, VkDevice device)
 	KVF_ASSERT(kvf_device != NULL);
 
 	VkCommandPool pool;
-	VkCommandPoolCreateInfo pool_info = { 0 };
+	VkCommandPoolCreateInfo pool_info = {};
 	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	pool_info.queueFamilyIndex = kvf_device->queues.graphics;
@@ -419,7 +415,7 @@ void __kvfCompleteDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 	KVF_ASSERT(kvf_device != NULL);
 
 	VkCommandPool pool;
-	VkCommandPoolCreateInfo pool_info = { 0 };
+	VkCommandPoolCreateInfo pool_info = {};
 	pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	pool_info.queueFamilyIndex = kvf_device->queues.graphics;
@@ -605,7 +601,7 @@ VkDescriptorPool __kvfDeviceCreateDescriptorPool(VkDevice device)
 		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1024 }
 	};
 
-	VkDescriptorPoolCreateInfo pool_info = { 0 };
+	VkDescriptorPoolCreateInfo pool_info = {};
 	pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	pool_info.poolSizeCount = sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize);
 	pool_info.pPoolSizes = pool_sizes;
@@ -1025,7 +1021,7 @@ const char* kvfVerbaliseVkResult(VkResult result)
 			KVF_FREE(extensions);
 			return;
 		}
-		VkDebugUtilsMessengerCreateInfoEXT create_info = { 0 };
+		VkDebugUtilsMessengerCreateInfoEXT create_info = {};
 		__kvfPopulateDebugMessengerCreateInfo(&create_info);
 		__kvfCheckVk(__kvfCreateDebugUtilsMessengerEXT(instance, &create_info, &__kvf_debug_messenger));
 	}
@@ -1063,7 +1059,7 @@ VkInstance kvfCreateInstance(const char** extensions_enabled, uint32_t extension
 {
 	VkInstance instance = VK_NULL_HANDLE;
 
-	VkInstanceCreateInfo create_info = { 0 };
+	VkInstanceCreateInfo create_info = {};
 	create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	create_info.pApplicationInfo = NULL;
 	create_info.flags = 0;
@@ -1078,7 +1074,7 @@ VkInstance kvfCreateInstance(const char** extensions_enabled, uint32_t extension
 	const char** new_extension_set = NULL;
 	if(__kvfCheckValidationLayerSupport())
 	{
-		VkDebugUtilsMessengerCreateInfoEXT debug_create_info = { 0 };
+		VkDebugUtilsMessengerCreateInfoEXT debug_create_info = {};
 		__kvfPopulateDebugMessengerCreateInfo(&debug_create_info);
 		new_extension_set = (const char**)KVF_MALLOC(sizeof(char*) * (extensions_count + 2));
 		memcpy(new_extension_set, extensions_enabled, sizeof(char*) * extensions_count);
@@ -1409,7 +1405,7 @@ uint32_t kvfGetDeviceQueueFamily(VkDevice device, KvfQueueType queue)
 bool kvfQueuePresentKHR(VkDevice device, VkSemaphore wait, VkSwapchainKHR swapchain, uint32_t image_index)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkPresentInfoKHR present_info = { 0 };
+	VkPresentInfoKHR present_info = {};
 	present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	present_info.waitSemaphoreCount = 1;
 	present_info.pWaitSemaphores = &wait;
@@ -1489,7 +1485,7 @@ int32_t kvfFindDeviceQueueFamilyKHR(VkPhysicalDevice physical, VkSurfaceKHR surf
 VkFence kvfCreateFence(VkDevice device)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkFenceCreateInfo fence_info = { 0 };
+	VkFenceCreateInfo fence_info = {};
 	fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 	VkFence fence;
@@ -1515,7 +1511,7 @@ void kvfDestroyFence(VkDevice device, VkFence fence)
 VkSemaphore kvfCreateSemaphore(VkDevice device)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkSemaphoreCreateInfo semaphore_info = { 0 };
+	VkSemaphoreCreateInfo semaphore_info = {};
 	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	VkSemaphore semaphore;
 	__kvfCheckVk(vkCreateSemaphore(device, &semaphore_info, NULL, &semaphore));
@@ -1606,7 +1602,7 @@ VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical,
 		extent.height = __kvfClamp(extent.height, support.capabilities.minImageExtent.height, support.capabilities.maxImageExtent.height);
 	}
 
-	VkSwapchainCreateInfoKHR createInfo = { 0 };
+	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	createInfo.surface = surface;
 	createInfo.minImageCount = image_count;
@@ -1679,7 +1675,7 @@ void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain)
 VkImage kvfCreateImage(VkDevice device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, KvfImageType type)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkImageCreateInfo image_info = { 0 };
+	VkImageCreateInfo image_info = {};
 	image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	image_info.imageType = VK_IMAGE_TYPE_2D;
 	image_info.extent.width = width;
@@ -1711,7 +1707,7 @@ void kvfImageToBuffer(VkCommandBuffer cmd, VkBuffer dst, VkImage src, size_t buf
 	KVF_ASSERT(dst != VK_NULL_HANDLE);
 	KVF_ASSERT(src != VK_NULL_HANDLE);
 	VkOffset3D offset = { 0, 0, 0 };
-	VkBufferImageCopy region = { 0 };
+	VkBufferImageCopy region = {};
 	region.bufferOffset = buffer_offset;
 	region.bufferRowLength = 0;
 	region.bufferImageHeight = 0;
@@ -1735,7 +1731,7 @@ void kvfDestroyImage(VkDevice device, VkImage image)
 VkImageView kvfCreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageViewType type, VkImageAspectFlags aspect, int layer_count)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkImageViewCreateInfo create_info = { 0 };
+	VkImageViewCreateInfo create_info = {};
 	create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	create_info.image = image;
 	create_info.viewType = type;
@@ -1771,7 +1767,7 @@ void kvfTransitionImageLayout(VkDevice device, VkImage image, KvfImageType type,
 	if(is_single_time_cmd_buffer)
 		kvfBeginCommandBuffer(cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-	VkImageMemoryBarrier barrier = { 0 };
+	VkImageMemoryBarrier barrier = {};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	barrier.oldLayout = old_layout;
 	barrier.newLayout = new_layout;
@@ -1818,7 +1814,7 @@ void kvfTransitionImageLayout(VkDevice device, VkImage image, KvfImageType type,
 VkSampler kvfCreateSampler(VkDevice device, VkFilter filters, VkSamplerAddressMode address_modes, VkSamplerMipmapMode mipmap_mode)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkSamplerCreateInfo info = { 0 };
+	VkSamplerCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	info.magFilter = filters;
 	info.minFilter = filters;
@@ -1846,7 +1842,7 @@ void kvfDestroySampler(VkDevice device, VkSampler sampler)
 VkBuffer kvfCreateBuffer(VkDevice device, VkBufferUsageFlags usage, VkDeviceSize size)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkBufferCreateInfo buffer_info = { 0 };
+	VkBufferCreateInfo buffer_info = {};
 	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	buffer_info.size = size;
 	buffer_info.usage = usage;
@@ -1861,7 +1857,7 @@ void kvfCopyBufferToBuffer(VkCommandBuffer cmd, VkBuffer dst, VkBuffer src, size
 	KVF_ASSERT(cmd != VK_NULL_HANDLE);
 	KVF_ASSERT(dst != VK_NULL_HANDLE);
 	KVF_ASSERT(src != VK_NULL_HANDLE);
-	VkBufferCopy copy_region = { 0 };
+	VkBufferCopy copy_region = {};
 	copy_region.size = size;
 	vkCmdCopyBuffer(cmd, src, dst, 1, &copy_region);
 }
@@ -1872,7 +1868,7 @@ void kvfCopyBufferToImage(VkCommandBuffer cmd, VkImage dst, VkBuffer src, size_t
 	KVF_ASSERT(dst != VK_NULL_HANDLE);
 	KVF_ASSERT(src != VK_NULL_HANDLE);
 	VkOffset3D offset = { 0, 0, 0 };
-	VkBufferImageCopy region = { 0 };
+	VkBufferImageCopy region = {};
 	region.bufferOffset = buffer_offset;
 	region.bufferRowLength = 0;
 	region.bufferImageHeight = 0;
@@ -1898,7 +1894,7 @@ VkFramebuffer kvfCreateFramebuffer(VkDevice device, VkRenderPass render_pass, Vk
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	KVF_ASSERT(image_views != NULL);
 
-	VkFramebufferCreateInfo framebuffer_info = { 0 };
+	VkFramebufferCreateInfo framebuffer_info = {};
 	framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	framebuffer_info.renderPass = render_pass;
 	framebuffer_info.attachmentCount = image_views_count;
@@ -1941,7 +1937,7 @@ VkCommandBuffer kvfCreateCommandBufferLeveled(VkDevice device, VkCommandBufferLe
 
 	VkCommandPool pool = kvfdevice->cmd_pool;
 	VkCommandBuffer buffer;
-	VkCommandBufferAllocateInfo alloc_info = { 0 };
+	VkCommandBufferAllocateInfo alloc_info = {};
 	alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	alloc_info.commandPool = pool;
 	alloc_info.level = level;
@@ -1953,7 +1949,7 @@ VkCommandBuffer kvfCreateCommandBufferLeveled(VkDevice device, VkCommandBufferLe
 void kvfBeginCommandBuffer(VkCommandBuffer buffer, VkCommandBufferUsageFlags usage)
 {
 	KVF_ASSERT(buffer != VK_NULL_HANDLE);
-	VkCommandBufferBeginInfo begin_info = { 0 };
+	VkCommandBufferBeginInfo begin_info = {};
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	begin_info.flags = usage;
 	__kvfCheckVk(vkBeginCommandBuffer(buffer, &begin_info));
@@ -1977,7 +1973,7 @@ void kvfSubmitCommandBuffer(VkDevice device, VkCommandBuffer buffer, KvfQueueTyp
 	if(fence != VK_NULL_HANDLE)
 		vkResetFences(device, 1, &fence);
 
-	VkSubmitInfo submit_info = { 0 };
+	VkSubmitInfo submit_info = {};
 	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submit_info.waitSemaphoreCount = (wait == VK_NULL_HANDLE ? 0 : 1);
 	submit_info.pWaitSemaphores = wait_semaphores;
@@ -1996,7 +1992,7 @@ void kvfSubmitSingleTimeCommandBuffer(VkDevice device, VkCommandBuffer buffer, K
 	if(fence != VK_NULL_HANDLE)
 		vkResetFences(device, 1, &fence);
 
-	VkSubmitInfo submit_info = { 0 };
+	VkSubmitInfo submit_info = {};
 	submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submit_info.commandBufferCount = 1;
 	submit_info.pCommandBuffers = &buffer;
@@ -2007,7 +2003,7 @@ void kvfSubmitSingleTimeCommandBuffer(VkDevice device, VkCommandBuffer buffer, K
 
 VkAttachmentDescription kvfBuildAttachmentDescription(KvfImageType type, VkFormat format, VkImageLayout initial, VkImageLayout final, bool clear, VkSampleCountFlagBits samples)
 {
-	VkAttachmentDescription attachment = { 0 };
+	VkAttachmentDescription attachment = {};
 
 	switch(type)
 	{
@@ -2114,13 +2110,13 @@ VkRenderPass kvfCreateRenderPassWithSubpassDependencies(VkDevice device, VkAttac
 		}
 	}
 
-	VkSubpassDescription subpass = { 0 };
+	VkSubpassDescription subpass = {};
 	subpass.pipelineBindPoint = bind_point;
 	subpass.colorAttachmentCount = color_attachment_count;
 	subpass.pColorAttachments = color_references;
 	subpass.pDepthStencilAttachment = depth_references;
 
-	VkRenderPassCreateInfo renderpass_create_info = { 0 };
+	VkRenderPassCreateInfo renderpass_create_info = {};
 	renderpass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderpass_create_info.attachmentCount = attachments_count;
 	renderpass_create_info.pAttachments = attachments;
@@ -2150,7 +2146,7 @@ void kvfBeginRenderPass(VkRenderPass pass, VkCommandBuffer cmd, VkFramebuffer fr
 	KVF_ASSERT(framebuffer != VK_NULL_HANDLE);
 
 	VkOffset2D offset = { 0, 0 };
-	VkRenderPassBeginInfo renderpass_info = { 0 };
+	VkRenderPassBeginInfo renderpass_info = {};
 	renderpass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderpass_info.renderPass = pass;
 	renderpass_info.framebuffer = framebuffer;
@@ -2164,7 +2160,7 @@ void kvfBeginRenderPass(VkRenderPass pass, VkCommandBuffer cmd, VkFramebuffer fr
 VkShaderModule kvfCreateShaderModule(VkDevice device, uint32_t* code, size_t size)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkShaderModuleCreateInfo createInfo = { 0 };
+	VkShaderModuleCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	createInfo.codeSize = size * sizeof(uint32_t);
 	createInfo.pCode = code;
@@ -2184,7 +2180,7 @@ void kvfDestroyShaderModule(VkDevice device, VkShaderModule shader)
 VkDescriptorSetLayout kvfCreateDescriptorSetLayout(VkDevice device, VkDescriptorSetLayoutBinding* bindings, size_t bindings_count)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkDescriptorSetLayoutCreateInfo layout_info = { 0 };
+	VkDescriptorSetLayoutCreateInfo layout_info = {};
 	layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layout_info.bindingCount = bindings_count;
 	layout_info.pBindings = bindings;
@@ -2218,7 +2214,7 @@ VkDescriptorSet kvfAllocateDescriptorSet(VkDevice device, VkDescriptorSetLayout 
 	KVF_ASSERT(pool != VK_NULL_HANDLE);
 
 	VkDescriptorSet set = VK_NULL_HANDLE;
-	VkDescriptorSetAllocateInfo alloc_info = { 0 };
+	VkDescriptorSetAllocateInfo alloc_info = {};
 	alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	alloc_info.descriptorPool = pool;
 	alloc_info.descriptorSetCount = 1;
@@ -2250,7 +2246,7 @@ VkWriteDescriptorSet kvfWriteStorageBufferToDescriptorSet(VkDevice device, VkDes
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	KVF_ASSERT(set != VK_NULL_HANDLE);
-	VkWriteDescriptorSet descriptor_write = { 0 };
+	VkWriteDescriptorSet descriptor_write = {};
 	descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	descriptor_write.dstSet = set;
 	descriptor_write.dstBinding = binding;
@@ -2265,7 +2261,7 @@ VkWriteDescriptorSet kvfWriteUniformBufferToDescriptorSet(VkDevice device, VkDes
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	KVF_ASSERT(set != VK_NULL_HANDLE);
-	VkWriteDescriptorSet descriptor_write = { 0 };
+	VkWriteDescriptorSet descriptor_write = {};
 	descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	descriptor_write.dstSet = set;
 	descriptor_write.dstBinding = binding;
@@ -2280,7 +2276,7 @@ VkWriteDescriptorSet kvfWriteImageToDescriptorSet(VkDevice device, VkDescriptorS
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	KVF_ASSERT(set != VK_NULL_HANDLE);
-	VkWriteDescriptorSet descriptor_write = { 0 };
+	VkWriteDescriptorSet descriptor_write = {};
 	descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	descriptor_write.dstSet = set;
 	descriptor_write.dstBinding = binding;
@@ -2294,7 +2290,7 @@ VkWriteDescriptorSet kvfWriteImageToDescriptorSet(VkDevice device, VkDescriptorS
 VkPipelineLayout kvfCreatePipelineLayout(VkDevice device, VkDescriptorSetLayout* set_layouts, size_t set_layouts_count, VkPushConstantRange* pc, size_t pc_count)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkPipelineLayoutCreateInfo pipeline_layout_info = { 0 };
+	VkPipelineLayoutCreateInfo pipeline_layout_info = {};
 	pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipeline_layout_info.setLayoutCount = set_layouts_count;
 	pipeline_layout_info.pSetLayouts = set_layouts;
@@ -2503,7 +2499,7 @@ VkPipeline kvfCreateGraphicsPipeline(VkDevice device, VkPipelineLayout layout, K
 	KVF_ASSERT(builder != NULL);
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 
-	VkPipelineColorBlendStateCreateInfo color_blending = { 0 };
+	VkPipelineColorBlendStateCreateInfo color_blending = {};
 	color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	color_blending.logicOpEnable = VK_FALSE;
 	color_blending.logicOp = VK_LOGIC_OP_COPY;
@@ -2516,19 +2512,19 @@ VkPipeline kvfCreateGraphicsPipeline(VkDevice device, VkPipelineLayout layout, K
 
 	VkDynamicState states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
-	VkPipelineDynamicStateCreateInfo dynamic_states = { 0 };
+	VkPipelineDynamicStateCreateInfo dynamic_states = {};
 	dynamic_states.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 	dynamic_states.dynamicStateCount = sizeof(states) / sizeof(VkDynamicState);
 	dynamic_states.pDynamicStates = states;
 
-	VkPipelineViewportStateCreateInfo viewport_state = { 0 };
+	VkPipelineViewportStateCreateInfo viewport_state = {};
 	viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 	viewport_state.viewportCount = 1;
 	viewport_state.pViewports = NULL;
 	viewport_state.scissorCount = 1;
 	viewport_state.pScissors = NULL;
 
-	VkGraphicsPipelineCreateInfo pipeline_info = { 0 };
+	VkGraphicsPipelineCreateInfo pipeline_info = {};
 	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipeline_info.stageCount = builder->shader_stages_count;
 	pipeline_info.pStages = builder->shader_stages;
@@ -2555,9 +2551,5 @@ void kvfDestroyPipeline(VkDevice device, VkPipeline pipeline)
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	vkDestroyPipeline(device, pipeline, NULL);
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // KVF_IMPLEMENTATION
