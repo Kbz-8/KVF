@@ -1080,11 +1080,12 @@ VkInstance kvfCreateInstance(const char** extensions_enabled, uint32_t extension
 	{
 		VkDebugUtilsMessengerCreateInfoEXT debug_create_info = {};
 		__kvfPopulateDebugMessengerCreateInfo(&debug_create_info);
-		new_extension_set = (const char**)KVF_MALLOC(sizeof(char*) * (extensions_count + 1));
+		new_extension_set = (const char**)KVF_MALLOC(sizeof(char*) * (extensions_count + 2));
 		memcpy(new_extension_set, extensions_enabled, sizeof(char*) * extensions_count);
-		new_extension_set[extensions_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+		new_extension_set[extensions_count + 0] = VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+		new_extension_set[extensions_count + 1] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 
-		create_info.enabledExtensionCount = extensions_count + 1;
+		create_info.enabledExtensionCount = extensions_count + 2;
 		create_info.ppEnabledExtensionNames = new_extension_set;
 		create_info.enabledLayerCount = __kvf_extra_layers_count;
 		create_info.ppEnabledLayerNames = (const char* const*)__kvf_extra_layers;
