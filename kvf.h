@@ -276,23 +276,25 @@ typedef struct
 	size_t sets_pools_size;
 } __KvfDevice;
 
-typedef struct
-{
-	VkSurfaceCapabilitiesKHR capabilities;
-	VkSurfaceFormatKHR* formats;
-	VkPresentModeKHR* presentModes;
-	uint32_t formats_count;
-	uint32_t presentModes_count;
-} __KvfSwapchainSupportInternal;
+#ifndef KVF_NO_KHR
+	typedef struct
+	{
+		VkSurfaceCapabilitiesKHR capabilities;
+		VkSurfaceFormatKHR* formats;
+		VkPresentModeKHR* presentModes;
+		uint32_t formats_count;
+		uint32_t presentModes_count;
+	} __KvfSwapchainSupportInternal;
 
-typedef struct
-{
-	__KvfSwapchainSupportInternal support;
-	VkSwapchainKHR swapchain;
-	VkExtent2D images_extent;
-	VkFormat images_format;
-	uint32_t images_count;
-} __KvfSwapchain;
+	typedef struct
+	{
+		__KvfSwapchainSupportInternal support;
+		VkSwapchainKHR swapchain;
+		VkExtent2D images_extent;
+		VkFormat images_format;
+		uint32_t images_count;
+	} __KvfSwapchain;
+#endif
 
 typedef struct
 {
@@ -318,9 +320,11 @@ __KvfDevice* __kvf_internal_devices = NULL;
 size_t __kvf_internal_devices_size = 0;
 size_t __kvf_internal_devices_capacity = 0;
 
-__KvfSwapchain* __kvf_internal_swapchains = NULL;
-size_t __kvf_internal_swapchains_size = 0;
-size_t __kvf_internal_swapchains_capacity = 0;
+#ifndef KVF_NO_KHR
+	__KvfSwapchain* __kvf_internal_swapchains = NULL;
+	size_t __kvf_internal_swapchains_size = 0;
+	size_t __kvf_internal_swapchains_capacity = 0;
+#endif
 
 __KvfFramebuffer* __kvf_internal_framebuffers = NULL;
 size_t __kvf_internal_framebuffers_size = 0;
@@ -485,58 +489,60 @@ __KvfDevice* __kvfGetKvfDeviceFromVkDevice(VkDevice device)
 	return NULL;
 }
 
-void __kvfAddSwapchainToArray(VkSwapchainKHR swapchain, __KvfSwapchainSupportInternal support, VkFormat format, uint32_t images_count, VkExtent2D extent)
-{
-	KVF_ASSERT(swapchain != VK_NULL_HANDLE);
-	if(__kvf_internal_swapchains_size == __kvf_internal_swapchains_capacity)
+#ifndef KVF_NO_KHR
+	void __kvfAddSwapchainToArray(VkSwapchainKHR swapchain, __KvfSwapchainSupportInternal support, VkFormat format, uint32_t images_count, VkExtent2D extent)
 	{
-		// Resize the dynamic array if necessary
-		__kvf_internal_swapchains_capacity += 2;
-		__kvf_internal_swapchains = (__KvfSwapchain*)KVF_REALLOC(__kvf_internal_swapchains, __kvf_internal_swapchains_capacity * sizeof(__KvfSwapchain));
-	}
-
-	__kvf_internal_swapchains[__kvf_internal_swapchains_size].swapchain = swapchain;
-	__kvf_internal_swapchains[__kvf_internal_swapchains_size].support = support;
-	__kvf_internal_swapchains[__kvf_internal_swapchains_size].images_format = format;
-	__kvf_internal_swapchains[__kvf_internal_swapchains_size].images_count = images_count;
-	__kvf_internal_swapchains[__kvf_internal_swapchains_size].images_extent = extent;
-	__kvf_internal_swapchains_size++;
-}
-
-void __kvfDestroySwapchain(VkDevice device, VkSwapchainKHR swapchain)
-{
-	KVF_ASSERT(swapchain != VK_NULL_HANDLE);
-	KVF_ASSERT(device != VK_NULL_HANDLE);
-
-	for(size_t i = 0; i < __kvf_internal_swapchains_size; i++)
-	{
-		if(__kvf_internal_swapchains[i].swapchain == swapchain)
+		KVF_ASSERT(swapchain != VK_NULL_HANDLE);
+		if(__kvf_internal_swapchains_size == __kvf_internal_swapchains_capacity)
 		{
-			vkDestroySwapchainKHR(device, swapchain, NULL);
-			// Shift the elements to fill the gap
-			for(size_t j = i; j < __kvf_internal_swapchains_size - 1; j++)
-				__kvf_internal_swapchains[j] = __kvf_internal_swapchains[j + 1];
-			__kvf_internal_swapchains_size--;
-			if(__kvf_internal_swapchains_size == 0)
-			{
-				KVF_FREE(__kvf_internal_swapchains);
-				__kvf_internal_swapchains_capacity = 0;
-			}
-			return;
+			// Resize the dynamic array if necessary
+			__kvf_internal_swapchains_capacity += 2;
+			__kvf_internal_swapchains = (__KvfSwapchain*)KVF_REALLOC(__kvf_internal_swapchains, __kvf_internal_swapchains_capacity * sizeof(__KvfSwapchain));
 		}
-    }
-}
 
-__KvfSwapchain* __kvfGetKvfSwapchainFromVkSwapchainKHR(VkSwapchainKHR swapchain)
-{
-	KVF_ASSERT(swapchain != VK_NULL_HANDLE);
-	for(size_t i = 0; i < __kvf_internal_swapchains_size; i++)
-	{
-		if(__kvf_internal_swapchains[i].swapchain == swapchain)
-			return &__kvf_internal_swapchains[i];
+		__kvf_internal_swapchains[__kvf_internal_swapchains_size].swapchain = swapchain;
+		__kvf_internal_swapchains[__kvf_internal_swapchains_size].support = support;
+		__kvf_internal_swapchains[__kvf_internal_swapchains_size].images_format = format;
+		__kvf_internal_swapchains[__kvf_internal_swapchains_size].images_count = images_count;
+		__kvf_internal_swapchains[__kvf_internal_swapchains_size].images_extent = extent;
+		__kvf_internal_swapchains_size++;
 	}
-	return NULL;
-}
+
+	void __kvfDestroySwapchain(VkDevice device, VkSwapchainKHR swapchain)
+	{
+		KVF_ASSERT(swapchain != VK_NULL_HANDLE);
+		KVF_ASSERT(device != VK_NULL_HANDLE);
+
+		for(size_t i = 0; i < __kvf_internal_swapchains_size; i++)
+		{
+			if(__kvf_internal_swapchains[i].swapchain == swapchain)
+			{
+				vkDestroySwapchainKHR(device, swapchain, NULL);
+				// Shift the elements to fill the gap
+				for(size_t j = i; j < __kvf_internal_swapchains_size - 1; j++)
+					__kvf_internal_swapchains[j] = __kvf_internal_swapchains[j + 1];
+				__kvf_internal_swapchains_size--;
+				if(__kvf_internal_swapchains_size == 0)
+				{
+					KVF_FREE(__kvf_internal_swapchains);
+					__kvf_internal_swapchains_capacity = 0;
+				}
+				return;
+			}
+		}
+	}
+
+	__KvfSwapchain* __kvfGetKvfSwapchainFromVkSwapchainKHR(VkSwapchainKHR swapchain)
+	{
+		KVF_ASSERT(swapchain != VK_NULL_HANDLE);
+		for(size_t i = 0; i < __kvf_internal_swapchains_size; i++)
+		{
+			if(__kvf_internal_swapchains[i].swapchain == swapchain)
+				return &__kvf_internal_swapchains[i];
+		}
+		return NULL;
+	}
+#endif
 
 void __kvfAddFramebufferToArray(VkFramebuffer framebuffer, VkExtent2D extent)
 {
@@ -1137,8 +1143,8 @@ __KvfQueueFamilies __kvfFindQueueFamilies(VkPhysicalDevice physical, VkSurfaceKH
 			queues.compute = i;
 		if(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			queues.graphics = i;
-		VkBool32 present_support = false;
 		#ifndef KVF_NO_KHR
+			VkBool32 present_support = false;
 			if(surface != VK_NULL_HANDLE)
 			{
 				vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present_support);
@@ -1147,9 +1153,12 @@ __KvfQueueFamilies __kvfFindQueueFamilies(VkPhysicalDevice physical, VkSurfaceKH
 				if(queues.graphics != -1 && queues.present != -1 && queues.compute != -1)
 					break;
 			}
+			else if(queues.graphics != -1 && queues.compute != -1)
+				break;
+		#else
+			if(queues.graphics != -1 && queues.compute != -1)
+				break;
 		#endif
-		else if(queues.graphics != -1 && queues.compute != -1)
-			break;
 	}
 	KVF_FREE(queue_families);
 	return queues;
