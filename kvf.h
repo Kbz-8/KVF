@@ -43,6 +43,8 @@
  * or VK_NO_PROTOTYPES before including this file to avoid conflicts with Vulkan prototypes.
  *
  * You can also #define KVF_ENABLE_VALIDATION_LAYERS to enable validation layers.
+ *
+ * Use #define KVF_NO_KHR to remove all functions that use KHR calls.
  */
 
 #ifndef KBZ_8_VULKAN_FRAMEWORK_H
@@ -99,11 +101,15 @@ VkPhysicalDevice kvfPickGoodPhysicalDevice(VkInstance instance, VkSurfaceKHR sur
 
 VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue);
 uint32_t kvfGetDeviceQueueFamily(VkDevice device, KvfQueueType queue);
-bool kvfQueuePresentKHR(VkDevice device, VkSemaphore wait, VkSwapchainKHR swapchain, uint32_t image_index); // return false when the swapchain must be recreated
+#ifndef KVF_NO_KHR
+	bool kvfQueuePresentKHR(VkDevice device, VkSemaphore wait, VkSwapchainKHR swapchain, uint32_t image_index); // return false when the swapchain must be recreated
+#endif
 
 // Meant to be used when creating a VkDevice with a custom VkPhysicalDevice
 int32_t kvfFindDeviceQueueFamily(VkPhysicalDevice physical, KvfQueueType type); // This function cannot find present queue
-int32_t kvfFindDeviceQueueFamilyKHR(VkPhysicalDevice physical, VkSurfaceKHR surface, KvfQueueType type); // This one can find present queue
+#ifndef KVF_NO_KHR
+	int32_t kvfFindDeviceQueueFamilyKHR(VkPhysicalDevice physical, VkSurfaceKHR surface, KvfQueueType type); // This one can find present queue
+#endif
 
 VkDevice kvfCreateDefaultDevice(VkPhysicalDevice physical);
 VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uint32_t extensions_count, VkPhysicalDeviceFeatures* features);
@@ -118,12 +124,14 @@ void kvfDestroyFence(VkDevice device, VkFence fence);
 VkSemaphore kvfCreateSemaphore(VkDevice device);
 void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 
-VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync);
-VkFormat kvfGetSwapchainImagesFormat(VkSwapchainKHR swapchain);
-uint32_t kvfGetSwapchainImagesCount(VkSwapchainKHR swapchain);
-uint32_t kvfGetSwapchainMinImagesCount(VkSwapchainKHR swapchain);
-VkExtent2D kvfGetSwapchainImagesSize(VkSwapchainKHR swapchain);
-void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain);
+#ifndef KVF_NO_KHR
+	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync);
+	VkFormat kvfGetSwapchainImagesFormat(VkSwapchainKHR swapchain);
+	uint32_t kvfGetSwapchainImagesCount(VkSwapchainKHR swapchain);
+	uint32_t kvfGetSwapchainMinImagesCount(VkSwapchainKHR swapchain);
+	VkExtent2D kvfGetSwapchainImagesSize(VkSwapchainKHR swapchain);
+	void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain);
+#endif
 
 VkImage kvfCreateImage(VkDevice device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, KvfImageType type);
 void kvfImageToBuffer(VkCommandBuffer cmd, VkBuffer dst, VkImage src, size_t buffer_offset, VkImageAspectFlagBits aspect, VkExtent3D extent);
@@ -151,7 +159,9 @@ void kvfSubmitCommandBuffer(VkDevice device, VkCommandBuffer buffer, KvfQueueTyp
 void kvfSubmitSingleTimeCommandBuffer(VkDevice device, VkCommandBuffer buffer, KvfQueueType queue, VkFence fence);
 
 VkAttachmentDescription kvfBuildAttachmentDescription(KvfImageType type, VkFormat format, VkImageLayout initial, VkImageLayout final, bool clear, VkSampleCountFlagBits samples);
-VkAttachmentDescription kvfBuildSwapchainAttachmentDescription(VkSwapchainKHR swapchain, bool clear);
+#ifndef KVF_NO_KHR
+	VkAttachmentDescription kvfBuildSwapchainAttachmentDescription(VkSwapchainKHR swapchain, bool clear);
+#endif
 
 VkRenderPass kvfCreateRenderPass(VkDevice device, VkAttachmentDescription* attachments, size_t attachments_count, VkPipelineBindPoint bind_point);
 VkRenderPass kvfCreateRenderPassWithSubpassDependencies(VkDevice device, VkAttachmentDescription* attachments, size_t attachments_count, VkPipelineBindPoint bind_point, VkSubpassDependency* dependencies, size_t dependencies_count);
@@ -1128,14 +1138,16 @@ __KvfQueueFamilies __kvfFindQueueFamilies(VkPhysicalDevice physical, VkSurfaceKH
 		if(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			queues.graphics = i;
 		VkBool32 present_support = false;
-		if(surface != VK_NULL_HANDLE)
-		{
-			vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present_support);
-			if(present_support)
-				queues.present = i;
-			if(queues.graphics != -1 && queues.present != -1 && queues.compute != -1)
-				break;
-		}
+		#ifndef KVF_NO_KHR
+			if(surface != VK_NULL_HANDLE)
+			{
+				vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present_support);
+				if(present_support)
+					queues.present = i;
+				if(queues.graphics != -1 && queues.present != -1 && queues.compute != -1)
+					break;
+			}
+		#endif
 		else if(queues.graphics != -1 && queues.compute != -1)
 			break;
 	}
@@ -1202,14 +1214,16 @@ int32_t __kvfScorePhysicalDevice(VkPhysicalDevice device, VkSurfaceKHR surface, 
 	if(queues.graphics == -1 || (surface != VK_NULL_HANDLE && queues.present == -1))
 		return -1;
 
-	if(surface != VK_NULL_HANDLE)
-	{
-		/* Check surface formats counts */
-		uint32_t format_count;
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, NULL);
-		if(format_count == 0)
-			return -1;
-	}
+	#ifndef KVF_NO_KHR
+		if(surface != VK_NULL_HANDLE)
+		{
+			/* Check surface formats counts */
+			uint32_t format_count;
+			vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, NULL);
+			if(format_count == 0)
+				return -1;
+		}
+	#endif
 
 	VkPhysicalDeviceProperties device_props;
 	vkGetPhysicalDeviceProperties(device, &device_props);
@@ -1401,23 +1415,25 @@ uint32_t kvfGetDeviceQueueFamily(VkDevice device, KvfQueueType queue)
 	return 0;
 }
 
-bool kvfQueuePresentKHR(VkDevice device, VkSemaphore wait, VkSwapchainKHR swapchain, uint32_t image_index)
-{
-	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkPresentInfoKHR present_info = {};
-	present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	present_info.waitSemaphoreCount = 1;
-	present_info.pWaitSemaphores = &wait;
-	present_info.swapchainCount = 1;
-	present_info.pSwapchains = &swapchain;
-	present_info.pImageIndices = &image_index;
-	VkResult result = vkQueuePresentKHR(kvfGetDeviceQueue(device, KVF_PRESENT_QUEUE), &present_info);
-	if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-		return false;
-	else
-		__kvfCheckVk(result);
-	return true;
-}
+#ifndef KVF_NO_KHR
+	bool kvfQueuePresentKHR(VkDevice device, VkSemaphore wait, VkSwapchainKHR swapchain, uint32_t image_index)
+	{
+		KVF_ASSERT(device != VK_NULL_HANDLE);
+		VkPresentInfoKHR present_info = {};
+		present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		present_info.waitSemaphoreCount = 1;
+		present_info.pWaitSemaphores = &wait;
+		present_info.swapchainCount = 1;
+		present_info.pSwapchains = &swapchain;
+		present_info.pImageIndices = &image_index;
+		VkResult result = vkQueuePresentKHR(kvfGetDeviceQueue(device, KVF_PRESENT_QUEUE), &present_info);
+		if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+			return false;
+		else
+			__kvfCheckVk(result);
+		return true;
+	}
+#endif
 
 int32_t kvfFindDeviceQueueFamily(VkPhysicalDevice physical, KvfQueueType type)
 {
@@ -1453,33 +1469,35 @@ int32_t kvfFindDeviceQueueFamily(VkPhysicalDevice physical, KvfQueueType type)
 	return queue;
 }
 
-int32_t kvfFindDeviceQueueFamilyKHR(VkPhysicalDevice physical, VkSurfaceKHR surface, KvfQueueType type)
-{
-	KVF_ASSERT(physical != VK_NULL_HANDLE);
-	KVF_ASSERT(surface != VK_NULL_HANDLE);
-
-	if(type != KVF_PRESENT_QUEUE)
-		return kvfFindDeviceQueueFamily(physical, type);
-
-	uint32_t queue_family_count;
-	vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, NULL);
-	VkQueueFamilyProperties* queue_families = (VkQueueFamilyProperties*)KVF_MALLOC(sizeof(VkQueueFamilyProperties) * queue_family_count);
-	vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, queue_families);
-
-	int32_t queue = -1;
-
-	for(int i = 0; i < queue_family_count; i++)
+#ifndef KVF_NO_KHR
+	int32_t kvfFindDeviceQueueFamilyKHR(VkPhysicalDevice physical, VkSurfaceKHR surface, KvfQueueType type)
 	{
-		VkBool32 present_support = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present_support);
-		if(present_support)
-			queue = i;
-		if(queue != -1)
-			break;
+		KVF_ASSERT(physical != VK_NULL_HANDLE);
+		KVF_ASSERT(surface != VK_NULL_HANDLE);
+
+		if(type != KVF_PRESENT_QUEUE)
+			return kvfFindDeviceQueueFamily(physical, type);
+
+		uint32_t queue_family_count;
+		vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, NULL);
+		VkQueueFamilyProperties* queue_families = (VkQueueFamilyProperties*)KVF_MALLOC(sizeof(VkQueueFamilyProperties) * queue_family_count);
+		vkGetPhysicalDeviceQueueFamilyProperties(physical, &queue_family_count, queue_families);
+
+		int32_t queue = -1;
+
+		for(int i = 0; i < queue_family_count; i++)
+		{
+			VkBool32 present_support = false;
+			vkGetPhysicalDeviceSurfaceSupportKHR(physical, i, surface, &present_support);
+			if(present_support)
+				queue = i;
+			if(queue != -1)
+				break;
+		}
+		KVF_FREE(queue_families);
+		return queue;
 	}
-	KVF_FREE(queue_families);
-	return queue;
-}
+#endif
 
 VkFence kvfCreateFence(VkDevice device)
 {
@@ -1525,151 +1543,153 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 	vkDestroySemaphore(device, semaphore, NULL);
 }
 
-__KvfSwapchainSupportInternal __kvfQuerySwapchainSupport(VkPhysicalDevice physical, VkSurfaceKHR surface)
-{
-	__KvfSwapchainSupportInternal support;
-
-	__kvfCheckVk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &support.capabilities));
-
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formats_count, NULL);
-	if(support.formats_count != 0)
+#ifndef KVF_NO_KHR
+	__KvfSwapchainSupportInternal __kvfQuerySwapchainSupport(VkPhysicalDevice physical, VkSurfaceKHR surface)
 	{
-		support.formats = (VkSurfaceFormatKHR*)KVF_MALLOC(sizeof(VkSurfaceFormatKHR) * support.formats_count);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formats_count, support.formats);
+		__KvfSwapchainSupportInternal support;
+
+		__kvfCheckVk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &support.capabilities));
+
+		vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formats_count, NULL);
+		if(support.formats_count != 0)
+		{
+			support.formats = (VkSurfaceFormatKHR*)KVF_MALLOC(sizeof(VkSurfaceFormatKHR) * support.formats_count);
+			vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &support.formats_count, support.formats);
+		}
+
+		vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModes_count, NULL);
+		if(support.presentModes_count != 0)
+		{
+			support.presentModes = (VkPresentModeKHR*)KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModes_count);
+			vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModes_count, support.presentModes);
+		}
+		return support;
 	}
 
-	vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModes_count, NULL);
-	if(support.presentModes_count != 0)
+	VkSurfaceFormatKHR __kvfChooseSwapSurfaceFormat(__KvfSwapchainSupportInternal* support)
 	{
-		support.presentModes = (VkPresentModeKHR*)KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModes_count);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &support.presentModes_count, support.presentModes);
-	}
-	return support;
-}
-
-VkSurfaceFormatKHR __kvfChooseSwapSurfaceFormat(__KvfSwapchainSupportInternal* support)
-{
-	for(int i = 0; i < support->formats_count; i++)
-	{
-		if(support->formats[i].format == VK_FORMAT_R8G8B8A8_SRGB && support->formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-			return support->formats[i];
-	}
-	return support->formats[0];
-}
-
-VkPresentModeKHR __kvfChooseSwapPresentMode(__KvfSwapchainSupportInternal* support, bool try_vsync)
-{
-	if(try_vsync == false)
-		return VK_PRESENT_MODE_IMMEDIATE_KHR;
-	for(int i = 0; i < support->presentModes_count; i++)
-	{
-		if(support->presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
-			return support->presentModes[i];
-	}
-	return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-uint32_t __kvfClamp(uint32_t i, uint32_t min, uint32_t max)
-{
-	const uint32_t t = i < min ? min : i;
-	return t > max ? max : t;
-}
-
-VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync)
-{
-	KVF_ASSERT(device != VK_NULL_HANDLE);
-	VkSwapchainKHR swapchain;
-	__KvfSwapchainSupportInternal support = __kvfQuerySwapchainSupport(physical, surface);
-
-	VkSurfaceFormatKHR surfaceFormat = __kvfChooseSwapSurfaceFormat(&support);
-	VkPresentModeKHR presentMode = __kvfChooseSwapPresentMode(&support, try_vsync);
-
-	uint32_t image_count = support.capabilities.minImageCount + 1;
-	if(support.capabilities.maxImageCount > 0 && image_count > support.capabilities.maxImageCount)
-		image_count = support.capabilities.maxImageCount;
-
-	__KvfDevice* kvfdevice = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvfdevice != NULL);
-
-	uint32_t queue_family_indices[] = { (uint32_t)kvfdevice->queues.graphics, (uint32_t)kvfdevice->queues.present };
-
-	if(support.capabilities.currentExtent.width != UINT32_MAX)
-		extent = support.capabilities.currentExtent;
-	else
-	{
-		extent.width = __kvfClamp(extent.width, support.capabilities.minImageExtent.width, support.capabilities.maxImageExtent.width);
-		extent.height = __kvfClamp(extent.height, support.capabilities.minImageExtent.height, support.capabilities.maxImageExtent.height);
+		for(int i = 0; i < support->formats_count; i++)
+		{
+			if(support->formats[i].format == VK_FORMAT_R8G8B8A8_SRGB && support->formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+				return support->formats[i];
+		}
+		return support->formats[0];
 	}
 
-	VkSwapchainCreateInfoKHR createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	createInfo.surface = surface;
-	createInfo.minImageCount = image_count;
-	createInfo.imageFormat = surfaceFormat.format;
-	createInfo.imageColorSpace = surfaceFormat.colorSpace;
-	createInfo.imageExtent = extent;
-	createInfo.imageArrayLayers = 1;
-	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	createInfo.preTransform = support.capabilities.currentTransform;
-	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	createInfo.presentMode = presentMode;
-	createInfo.clipped = VK_TRUE;
-	createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-	if(kvfdevice->queues.graphics != kvfdevice->queues.present)
+	VkPresentModeKHR __kvfChooseSwapPresentMode(__KvfSwapchainSupportInternal* support, bool try_vsync)
 	{
-		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		createInfo.queueFamilyIndexCount = 2;
-		createInfo.pQueueFamilyIndices = queue_family_indices;
+		if(try_vsync == false)
+			return VK_PRESENT_MODE_IMMEDIATE_KHR;
+		for(int i = 0; i < support->presentModes_count; i++)
+		{
+			if(support->presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+				return support->presentModes[i];
+		}
+		return VK_PRESENT_MODE_FIFO_KHR;
 	}
-	else
-		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	__kvfCheckVk(vkCreateSwapchainKHR(device, &createInfo, NULL, &swapchain));
+	uint32_t __kvfClamp(uint32_t i, uint32_t min, uint32_t max)
+	{
+		const uint32_t t = i < min ? min : i;
+		return t > max ? max : t;
+	}
 
-	uint32_t images_count;
-	vkGetSwapchainImagesKHR(device, swapchain, (uint32_t*)&images_count, NULL);
+	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync)
+	{
+		KVF_ASSERT(device != VK_NULL_HANDLE);
+		VkSwapchainKHR swapchain;
+		__KvfSwapchainSupportInternal support = __kvfQuerySwapchainSupport(physical, surface);
 
-	__kvfAddSwapchainToArray(swapchain, support, surfaceFormat.format, images_count, extent);
+		VkSurfaceFormatKHR surfaceFormat = __kvfChooseSwapSurfaceFormat(&support);
+		VkPresentModeKHR presentMode = __kvfChooseSwapPresentMode(&support, try_vsync);
 
-	return swapchain;
-}
+		uint32_t image_count = support.capabilities.minImageCount + 1;
+		if(support.capabilities.maxImageCount > 0 && image_count > support.capabilities.maxImageCount)
+			image_count = support.capabilities.maxImageCount;
 
-VkFormat kvfGetSwapchainImagesFormat(VkSwapchainKHR swapchain)
-{
-	__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
-	KVF_ASSERT(kvf_swapchain != NULL);
-	return kvf_swapchain->images_format;
-}
+		__KvfDevice* kvfdevice = __kvfGetKvfDeviceFromVkDevice(device);
+		KVF_ASSERT(kvfdevice != NULL);
 
-uint32_t kvfGetSwapchainImagesCount(VkSwapchainKHR swapchain)
-{
-	__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
-	KVF_ASSERT(kvf_swapchain != NULL);
-	return kvf_swapchain->images_count;
-}
+		uint32_t queue_family_indices[] = { (uint32_t)kvfdevice->queues.graphics, (uint32_t)kvfdevice->queues.present };
 
-uint32_t kvfGetSwapchainMinImagesCount(VkSwapchainKHR swapchain)
-{
-	__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
-	KVF_ASSERT(kvf_swapchain != NULL);
-	return kvf_swapchain->support.capabilities.minImageCount;
-}
+		if(support.capabilities.currentExtent.width != UINT32_MAX)
+			extent = support.capabilities.currentExtent;
+		else
+		{
+			extent.width = __kvfClamp(extent.width, support.capabilities.minImageExtent.width, support.capabilities.maxImageExtent.width);
+			extent.height = __kvfClamp(extent.height, support.capabilities.minImageExtent.height, support.capabilities.maxImageExtent.height);
+		}
 
-VkExtent2D kvfGetSwapchainImagesSize(VkSwapchainKHR swapchain)
-{
-	__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
-	KVF_ASSERT(kvf_swapchain != NULL);
-	return kvf_swapchain->images_extent;
-}
+		VkSwapchainCreateInfoKHR createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+		createInfo.surface = surface;
+		createInfo.minImageCount = image_count;
+		createInfo.imageFormat = surfaceFormat.format;
+		createInfo.imageColorSpace = surfaceFormat.colorSpace;
+		createInfo.imageExtent = extent;
+		createInfo.imageArrayLayers = 1;
+		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		createInfo.preTransform = support.capabilities.currentTransform;
+		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		createInfo.presentMode = presentMode;
+		createInfo.clipped = VK_TRUE;
+		createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain)
-{
-	if(swapchain == VK_NULL_HANDLE)
-		return;
-	KVF_ASSERT(device != VK_NULL_HANDLE);
-	__kvfDestroySwapchain(device, swapchain);
-}
+		if(kvfdevice->queues.graphics != kvfdevice->queues.present)
+		{
+			createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+			createInfo.queueFamilyIndexCount = 2;
+			createInfo.pQueueFamilyIndices = queue_family_indices;
+		}
+		else
+			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		__kvfCheckVk(vkCreateSwapchainKHR(device, &createInfo, NULL, &swapchain));
+
+		uint32_t images_count;
+		vkGetSwapchainImagesKHR(device, swapchain, (uint32_t*)&images_count, NULL);
+
+		__kvfAddSwapchainToArray(swapchain, support, surfaceFormat.format, images_count, extent);
+
+		return swapchain;
+	}
+
+	VkFormat kvfGetSwapchainImagesFormat(VkSwapchainKHR swapchain)
+	{
+		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
+		KVF_ASSERT(kvf_swapchain != NULL);
+		return kvf_swapchain->images_format;
+	}
+
+	uint32_t kvfGetSwapchainImagesCount(VkSwapchainKHR swapchain)
+	{
+		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
+		KVF_ASSERT(kvf_swapchain != NULL);
+		return kvf_swapchain->images_count;
+	}
+
+	uint32_t kvfGetSwapchainMinImagesCount(VkSwapchainKHR swapchain)
+	{
+		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
+		KVF_ASSERT(kvf_swapchain != NULL);
+		return kvf_swapchain->support.capabilities.minImageCount;
+	}
+
+	VkExtent2D kvfGetSwapchainImagesSize(VkSwapchainKHR swapchain)
+	{
+		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
+		KVF_ASSERT(kvf_swapchain != NULL);
+		return kvf_swapchain->images_extent;
+	}
+
+	void kvfDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain)
+	{
+		if(swapchain == VK_NULL_HANDLE)
+			return;
+		KVF_ASSERT(device != VK_NULL_HANDLE);
+		__kvfDestroySwapchain(device, swapchain);
+	}
+#endif
 
 VkImage kvfCreateImage(VkDevice device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, KvfImageType type)
 {
@@ -2051,13 +2071,15 @@ VkAttachmentDescription kvfBuildAttachmentDescription(KvfImageType type, VkForma
 	return attachment;
 }
 
-VkAttachmentDescription kvfBuildSwapchainAttachmentDescription(VkSwapchainKHR swapchain, bool clear)
-{
-	__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
-	KVF_ASSERT(kvf_swapchain != NULL);
-	KVF_ASSERT(kvf_swapchain->images_count != 0);
-	return kvfBuildAttachmentDescription(KVF_IMAGE_COLOR, kvf_swapchain->images_format, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, clear, VK_SAMPLE_COUNT_1_BIT);
-}
+#ifndef KVF_NO_KHR
+	VkAttachmentDescription kvfBuildSwapchainAttachmentDescription(VkSwapchainKHR swapchain, bool clear)
+	{
+		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
+		KVF_ASSERT(kvf_swapchain != NULL);
+		KVF_ASSERT(kvf_swapchain->images_count != 0);
+		return kvfBuildAttachmentDescription(KVF_IMAGE_COLOR, kvf_swapchain->images_format, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, clear, VK_SAMPLE_COUNT_1_BIT);
+	}
+#endif
 
 VkRenderPass kvfCreateRenderPass(VkDevice device, VkAttachmentDescription* attachments, size_t attachments_count, VkPipelineBindPoint bind_point)
 {
