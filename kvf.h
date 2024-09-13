@@ -1300,24 +1300,48 @@ VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uin
 
 	KVF_ASSERT(kvfdevice != NULL);
 
-	VkDeviceQueueCreateInfo queue_create_info[2];
-	queue_create_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queue_create_info[0].queueFamilyIndex = kvfdevice->queues.graphics;
-	queue_create_info[0].queueCount = 1;
-	queue_create_info[0].pQueuePriorities = &queue_priority;
-	queue_create_info[0].flags = 0;
-	queue_create_info[0].pNext = NULL;
-	queue_create_info[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queue_create_info[1].queueFamilyIndex = kvfdevice->queues.present;
-	queue_create_info[1].queueCount = 1;
-	queue_create_info[1].pQueuePriorities = &queue_priority;
-	queue_create_info[1].flags = 0;
-	queue_create_info[1].pNext = NULL;
+	uint32_t queue_count = 0;
+	queue_count += (kvfdevice->queues.graphics != -1);
+	queue_count += (kvfdevice->queues.present != -1);
+	queue_count += (kvfdevice->queues.compute != -1);
+
+	VkDeviceQueueCreateInfo* queue_create_infos = (VkDeviceQueueCreateInfo*)KVF_MALLOC(queue_count * sizeof(VkDeviceQueueCreateInfo));
+	size_t i = 0;
+	if(kvfdevice->queues.graphics != -1)
+	{
+		queue_create_infos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queue_create_infos[i].queueFamilyIndex = kvfdevice->queues.graphics;
+		queue_create_infos[i].queueCount = 1;
+		queue_create_infos[i].pQueuePriorities = &queue_priority;
+		queue_create_infos[i].flags = 0;
+		queue_create_infos[i].pNext = NULL;
+		i++;
+	}
+	if(kvfdevice->queues.present != -1 && kvfdevice->queues.present != kvfdevice->queues.graphics)
+	{
+		queue_create_infos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queue_create_infos[i].queueFamilyIndex = kvfdevice->queues.present;
+		queue_create_infos[i].queueCount = 1;
+		queue_create_infos[i].pQueuePriorities = &queue_priority;
+		queue_create_infos[i].flags = 0;
+		queue_create_infos[i].pNext = NULL;
+		i++;
+	}
+	if(kvfdevice->queues.compute != -1 && kvfdevice->queues.present != kvfdevice->queues.compute && kvfdevice->queues.graphics != kvfdevice->queues.compute)
+	{
+		queue_create_infos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queue_create_infos[i].queueFamilyIndex = kvfdevice->queues.compute;
+		queue_create_infos[i].queueCount = 1;
+		queue_create_infos[i].pQueuePriorities = &queue_priority;
+		queue_create_infos[i].flags = 0;
+		queue_create_infos[i].pNext = NULL;
+		i++;
+	}
 
 	VkDeviceCreateInfo createInfo;
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.queueCreateInfoCount = (kvfdevice->queues.graphics == kvfdevice->queues.present ? 1 : 2);
-	createInfo.pQueueCreateInfos = queue_create_info;
+	createInfo.queueCreateInfoCount = i;
+	createInfo.pQueueCreateInfos = queue_create_infos;
 	createInfo.pEnabledFeatures = features;
 	createInfo.enabledExtensionCount = extensions_count;
 	createInfo.ppEnabledExtensionNames = extensions;
@@ -1344,24 +1368,48 @@ VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 {
 	const float queue_priority = 1.0f;
 
-	VkDeviceQueueCreateInfo queue_create_info[2];
-	queue_create_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queue_create_info[0].queueFamilyIndex = graphics_queue;
-	queue_create_info[0].queueCount = 1;
-	queue_create_info[0].pQueuePriorities = &queue_priority;
-	queue_create_info[0].flags = 0;
-	queue_create_info[0].pNext = NULL;
-	queue_create_info[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queue_create_info[1].queueFamilyIndex = present_queue;
-	queue_create_info[1].queueCount = 1;
-	queue_create_info[1].pQueuePriorities = &queue_priority;
-	queue_create_info[1].flags = 0;
-	queue_create_info[1].pNext = NULL;
+	uint32_t queue_count = 0;
+	queue_count += (graphics_queue != -1);
+	queue_count += (present_queue != -1);
+	queue_count += (compute_queue != -1);
+
+	VkDeviceQueueCreateInfo* queue_create_infos = (VkDeviceQueueCreateInfo*)KVF_MALLOC(queue_count * sizeof(VkDeviceQueueCreateInfo));
+	size_t i = 0;
+	if(graphics_queue != -1)
+	{
+		queue_create_infos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queue_create_infos[i].queueFamilyIndex = graphics_queue;
+		queue_create_infos[i].queueCount = 1;
+		queue_create_infos[i].pQueuePriorities = &queue_priority;
+		queue_create_infos[i].flags = 0;
+		queue_create_infos[i].pNext = NULL;
+		i++;
+	}
+	if(present_queue != -1 && present_queue != graphics_queue)
+	{
+		queue_create_infos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queue_create_infos[i].queueFamilyIndex = present_queue;
+		queue_create_infos[i].queueCount = 1;
+		queue_create_infos[i].pQueuePriorities = &queue_priority;
+		queue_create_infos[i].flags = 0;
+		queue_create_infos[i].pNext = NULL;
+		i++;
+	}
+	if(compute_queue != -1 && present_queue != compute_queue && graphics_queue != compute_queue)
+	{
+		queue_create_infos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queue_create_infos[i].queueFamilyIndex = compute_queue;
+		queue_create_infos[i].queueCount = 1;
+		queue_create_infos[i].pQueuePriorities = &queue_priority;
+		queue_create_infos[i].flags = 0;
+		queue_create_infos[i].pNext = NULL;
+		i++;
+	}
 
 	VkDeviceCreateInfo createInfo;
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.queueCreateInfoCount = (graphics_queue == present_queue ? 1 : 2);
-	createInfo.pQueueCreateInfos = queue_create_info;
+	createInfo.queueCreateInfoCount = queue_count;
+	createInfo.pQueueCreateInfos = queue_create_infos;
 	createInfo.pEnabledFeatures = features;
 	createInfo.enabledExtensionCount = extensions_count;
 	createInfo.ppEnabledExtensionNames = extensions;
