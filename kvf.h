@@ -93,6 +93,7 @@ typedef void (*KvfErrorCallback)(const char* message);
 typedef struct KvfGraphicsPipelineBuilder KvfGraphicsPipelineBuilder;
 
 void kvfSetErrorCallback(KvfErrorCallback callback);
+void kvfSetWarningCallback(KvfErrorCallback callback);
 void kvfSetValidationErrorCallback(KvfErrorCallback callback);
 void kvfSetValidationWarningCallback(KvfErrorCallback callback);
 
@@ -128,7 +129,7 @@ VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uin
 VkDevice kvfCreateDefaultDevicePhysicalDeviceAndCustomQueues(VkPhysicalDevice physical, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue);
 VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical, const char** extensions, uint32_t extensions_count, VkPhysicalDeviceFeatures* features, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue);
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
-	void kvfPassDeviceVulkanFunctionPointers(VkDevice device, const KvfDeviceVulkanFunctions* fns);
+	void kvfPassDeviceVulkanFunctionPointers(VkPhysicalDevice physical, VkDevice device, const KvfDeviceVulkanFunctions* fns);
 #endif
 void kvfDestroyDevice(VkDevice device);
 
@@ -401,10 +402,10 @@ typedef struct __KvfDevice
 	VkDevice device;
 	VkPhysicalDevice physical;
 	VkCommandPool cmd_pool;
-	VkCommandBuffer* cmd_buffers = NULL;
+	VkCommandBuffer* cmd_buffers;
 	__KvfDescriptorPool* sets_pools;
-	size_t cmd_buffers_size = 0;
-	size_t cmd_buffers_capacity = 0;
+	size_t cmd_buffers_size;
+	size_t cmd_buffers_capacity;
 	size_t sets_pools_size;
 } __KvfDevice;
 
@@ -469,6 +470,7 @@ size_t __kvf_internal_framebuffers_capacity = 0;
 #endif
 
 KvfErrorCallback __kvf_error_callback = NULL;
+KvfErrorCallback __kvf_warning_callback = NULL;
 KvfErrorCallback __kvf_validation_error_callback = NULL;
 KvfErrorCallback __kvf_validation_warning_callback = NULL;
 
@@ -479,7 +481,7 @@ KvfErrorCallback __kvf_validation_warning_callback = NULL;
 
 void __kvfCheckVk(VkResult result, const char* function)
 {
-	if(result != VK_SUCCESS)
+	if(result < VK_SUCCESS)
 	{
 		if(__kvf_error_callback != NULL)
 		{
@@ -492,6 +494,17 @@ void __kvfCheckVk(VkResult result, const char* function)
 		#ifndef KVF_NO_EXIT_ON_FAILURE
 			exit(EXIT_FAILURE);
 		#endif
+	}
+	else if(result > VK_SUCCESS)
+	{
+		if(__kvf_warning_callback != NULL)
+		{
+			char buffer[1024];
+			snprintf(buffer, 1024, "KVF Vulkan warning in '%s': %s", function, kvfVerbaliseVkResult(result));
+			__kvf_warning_callback(buffer);
+			return;
+		}
+		printf("KVF Vulkan warning in '%s': %s\n", function, kvfVerbaliseVkResult(result));
 	}
 }
 
@@ -815,6 +828,11 @@ void __kvfDestroyDescriptorPools(VkDevice device)
 void kvfSetErrorCallback(KvfErrorCallback callback)
 {
 	__kvf_error_callback = callback;
+}
+
+void kvfSetWarningCallback(KvfErrorCallback callback)
+{
+	__kvf_warning_callback = callback;
 }
 
 void kvfSetValidationErrorCallback(KvfErrorCallback callback)
@@ -1552,7 +1570,9 @@ VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uin
 
 	VkDevice device;
 	__kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateDevice)(physical, &createInfo, NULL, &device));
-	__kvfCompleteDevice(physical, device);
+	#ifndef KVF_IMPL_VK_NO_PROTOTYPES
+		__kvfCompleteDevice(physical, device);
+	#endif
 
 	return device;
 }
@@ -1621,19 +1641,22 @@ VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 
 	VkDevice device;
 	__kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateDevice)(physical, &createInfo, NULL, &device));
-	__kvfCompleteDeviceCustomPhysicalDeviceAndQueues(physical, device, graphics_queue, present_queue, compute_queue);
+	#ifndef KVF_IMPL_VK_NO_PROTOTYPES
+		__kvfCompleteDeviceCustomPhysicalDeviceAndQueues(physical, device, graphics_queue, present_queue, compute_queue);
+	#endif
 
 	return device;
 }
 
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
-	void kvfPassDeviceVulkanFunctionPointers(VkDevice device, const KvfDeviceVulkanFunctions* fns)
+	void kvfPassDeviceVulkanFunctionPointers(VkPhysicalDevice physical, VkDevice device, const KvfDeviceVulkanFunctions* fns)
 	{
 		KVF_ASSERT(device != VK_NULL_HANDLE);
 		KVF_ASSERT(fns != NULL);
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkPhysicalDevice(physical);
 		KVF_ASSERT(kvf_device != NULL);
 		kvf_device->fns = *fns;
+		__kvfCompleteDevice(physical, device);
 	}
 #endif
 
@@ -2318,10 +2341,9 @@ VkCommandBuffer kvfCreateCommandBufferLeveled(VkDevice device, VkCommandBufferLe
 		kvf_device->cmd_buffers_capacity += KVF_COMMAND_POOL_CAPACITY;
 		kvf_device->cmd_buffers = (VkCommandBuffer*)KVF_REALLOC(kvf_device->cmd_buffers, kvf_device->cmd_buffers_capacity * sizeof(VkCommandBuffer));
 		KVF_ASSERT(kvf_device->cmd_buffers != NULL && "allocation failed :(");
-		kvf_device->cmd_buffers[kvf_device->cmd_buffers_size] = buffer;
-		kvf_device->cmd_buffers_size++;
 	}
-
+	kvf_device->cmd_buffers[kvf_device->cmd_buffers_size] = buffer;
+	kvf_device->cmd_buffers_size++;
 	return buffer;
 }
 
@@ -2393,7 +2415,7 @@ void kvfSubmitSingleTimeCommandBuffer(VkDevice device, VkCommandBuffer buffer, K
 	submit_info.pCommandBuffers = &buffer;
 	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkQueueSubmit)(kvfGetDeviceQueue(device, queue), 1, &submit_info, fence));
 	if(fence != VK_NULL_HANDLE)
-		KVF_GET_DEVICE_FUNCTION(vkWaitForFences)(device, 1, &fence, VK_TRUE, UINT64_MAX);
+		kvfWaitForFence(device, fence);	
 }
 
 VkAttachmentDescription kvfBuildAttachmentDescription(KvfImageType type, VkFormat format, VkImageLayout initial, VkImageLayout final, bool clear, VkSampleCountFlagBits samples)
