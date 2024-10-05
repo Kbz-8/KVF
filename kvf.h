@@ -51,7 +51,6 @@
 #ifndef KBZ_8_VULKAN_FRAMEWORK_H
 #define KBZ_8_VULKAN_FRAMEWORK_H
 
-#include "vulkan/vulkan_core.h"
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
 	#define VK_NO_PROTOTYPES
 #endif
@@ -141,7 +140,7 @@ VkSemaphore kvfCreateSemaphore(VkDevice device);
 void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 
 #ifndef KVF_NO_KHR
-	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync);
+	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, VkSwapchainKHR old_swapchain, bool try_vsync);
 	VkFormat kvfGetSwapchainImagesFormat(VkSwapchainKHR swapchain);
 	uint32_t kvfGetSwapchainImagesCount(VkSwapchainKHR swapchain);
 	uint32_t kvfGetSwapchainMinImagesCount(VkSwapchainKHR swapchain);
@@ -1913,7 +1912,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 		return t > max ? max : t;
 	}
 
-	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync)
+	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, VkSwapchainKHR old_swapchain, bool try_vsync)
 	{
 		KVF_ASSERT(device != VK_NULL_HANDLE);
 		VkSwapchainKHR swapchain;
@@ -1952,7 +1951,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		createInfo.presentMode = presentMode;
 		createInfo.clipped = VK_TRUE;
-		createInfo.oldSwapchain = VK_NULL_HANDLE;
+		createInfo.oldSwapchain = old_swapchain;
 
 		if(kvf_device->queues.graphics != kvf_device->queues.present)
 		{
