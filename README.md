@@ -85,7 +85,7 @@ int main(void)
 	kvfGPipelineBuilderSetCullMode(builder, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 	kvfGPipelineBuilderAddShaderStage(builder, VK_SHADER_STAGE_VERTEX_BIT, vertex_shader_module, "main");
 	kvfGPipelineBuilderAddShaderStage(builder, VK_SHADER_STAGE_FRAGMENT_BIT, fragment_shader_module, "main");
-    kvfGPipelineBuilderSetMultisampling(builder , VK_SAMPLE_COUNT_1_BIT);
+    	kvfGPipelineBuilderSetMultisampling(builder , VK_SAMPLE_COUNT_1_BIT);
 	kvfGPipelineBuilderDisableDepthTest(builder);
 	kvfGPipelineBuilderDisableBlending(builder);
 
