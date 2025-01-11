@@ -40,7 +40,7 @@
  * by using #define KVF_NO_EXIT_ON_FAILURE
  *
  * If you are using Volk or any other meta loader you must define KVF_IMPL_VK_NO_PROTOTYPES
- * or VK_NO_PROTOTYPES before including this file to avoid conflicts with Vulkan prototypes.
+ * before including this file to avoid conflicts with Vulkan prototypes.
  * You will also need to pass the function pointers to kvf using dedicated functions.
  *
  * You can also #define KVF_ENABLE_VALIDATION_LAYERS to enable validation layers.
@@ -51,12 +51,11 @@
 #ifndef KBZ_8_VULKAN_FRAMEWORK_H
 #define KBZ_8_VULKAN_FRAMEWORK_H
 
-#include "vulkan/vulkan_core.h"
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
 	#define VK_NO_PROTOTYPES
 #endif
 
-#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -131,6 +130,7 @@ VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
 	void kvfPassDeviceVulkanFunctionPointers(VkPhysicalDevice physical, VkDevice device, const KvfDeviceVulkanFunctions* fns);
 #endif
+void kvfSetAllocationCallbacks(VkDevice device, const VkAllocationCallbacks* callbacks);
 void kvfDestroyDevice(VkDevice device);
 
 VkFence kvfCreateFence(VkDevice device);
@@ -141,7 +141,7 @@ VkSemaphore kvfCreateSemaphore(VkDevice device);
 void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore);
 
 #ifndef KVF_NO_KHR
-	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync);
+	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, VkSwapchainKHR old_swapchain, bool try_vsync);
 	VkFormat kvfGetSwapchainImagesFormat(VkSwapchainKHR swapchain);
 	uint32_t kvfGetSwapchainImagesCount(VkSwapchainKHR swapchain);
 	uint32_t kvfGetSwapchainMinImagesCount(VkSwapchainKHR swapchain);
@@ -167,12 +167,13 @@ VkFramebuffer kvfCreateFramebuffer(VkDevice device, VkRenderPass renderpass, VkI
 VkExtent2D kvfGetFramebufferSize(VkFramebuffer buffer);
 void kvfDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer);
 
-VkCommandBuffer kvfCreateCommandBuffer(VkDevice device);
-VkCommandBuffer kvfCreateCommandBufferLeveled(VkDevice device, VkCommandBufferLevel level);
+VkCommandBuffer kvfCreateCommandBuffer(VkDevice device); // Uses internal command pool, not thread safe
+VkCommandBuffer kvfCreateCommandBufferLeveled(VkDevice device, VkCommandBufferLevel level); // Same
 void kvfBeginCommandBuffer(VkCommandBuffer buffer, VkCommandBufferUsageFlags flags);
 void kvfEndCommandBuffer(VkCommandBuffer buffer);
 void kvfSubmitCommandBuffer(VkDevice device, VkCommandBuffer buffer, KvfQueueType queue, VkSemaphore signal, VkSemaphore wait, VkFence fence, VkPipelineStageFlags* stages);
 void kvfSubmitSingleTimeCommandBuffer(VkDevice device, VkCommandBuffer buffer, KvfQueueType queue, VkFence fence);
+void kvfDestroyCommandBuffer(VkDevice device, VkCommandBuffer buffer);
 
 VkAttachmentDescription kvfBuildAttachmentDescription(KvfImageType type, VkFormat format, VkImageLayout initial, VkImageLayout final, bool clear, VkSampleCountFlagBits samples);
 #ifndef KVF_NO_KHR
@@ -230,14 +231,14 @@ void kvfGPipelineBuilderSetVertexInputs(KvfGraphicsPipelineBuilder* builder, VkV
 void kvfGPipelineBuilderAddShaderStage(KvfGraphicsPipelineBuilder* builder, VkShaderStageFlagBits stage, VkShaderModule module, const char* entry);
 void kvfGPipelineBuilderResetShaderStages(KvfGraphicsPipelineBuilder* builder);
 
-VkPipeline kvfCreateGraphicsPipeline(VkDevice device, VkPipelineLayout layout, KvfGraphicsPipelineBuilder* builder, VkRenderPass pass);
+VkPipeline kvfCreateGraphicsPipeline(VkDevice device, VkPipelineCache cache, VkPipelineLayout layout, KvfGraphicsPipelineBuilder* builder, VkRenderPass pass);
 void kvfDestroyPipeline(VkDevice device, VkPipeline pipeline);
 
 void kvfCheckVk(VkResult result);
 
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
 	#ifdef KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE
-			#undef KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE
+		#undef KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE
 	#endif
 	#define KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(fn) PFN_##fn fn
 
@@ -313,6 +314,7 @@ void kvfCheckVk(VkResult result);
 		KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkDestroyShaderModule);
 		KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkDeviceWaitIdle);
 		KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkEndCommandBuffer);
+		KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkFreeCommandBuffers);
 		KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetDeviceQueue);
 		KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetImageSubresourceLayout);
 		KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkQueueSubmit);
@@ -400,6 +402,7 @@ typedef struct __KvfDevice
 		KvfDeviceVulkanFunctions fns;
 	#endif
 	VkDevice device;
+	VkAllocationCallbacks* callbacks;
 	VkPhysicalDevice physical;
 	VkCommandPool cmd_pool;
 	VkCommandBuffer* cmd_buffers;
@@ -414,9 +417,9 @@ typedef struct __KvfDevice
 	{
 		VkSurfaceCapabilitiesKHR capabilities;
 		VkSurfaceFormatKHR* formats;
-		VkPresentModeKHR* presentModes;
+		VkPresentModeKHR* present_modes;
 		uint32_t formats_count;
-		uint32_t presentModes_count;
+		uint32_t present_modes_count;
 	} __KvfSwapchainSupportInternal;
 
 	typedef struct __KvfSwapchain
@@ -449,34 +452,34 @@ struct KvfGraphicsPipelineBuilder
 };
 
 // Dynamic arrays
-__KvfDevice* __kvf_internal_devices = NULL;
-size_t __kvf_internal_devices_size = 0;
-size_t __kvf_internal_devices_capacity = 0;
+static __KvfDevice* __kvf_internal_devices = NULL;
+static size_t __kvf_internal_devices_size = 0;
+static size_t __kvf_internal_devices_capacity = 0;
 
 #ifndef KVF_NO_KHR
-	__KvfSwapchain* __kvf_internal_swapchains = NULL;
-	size_t __kvf_internal_swapchains_size = 0;
-	size_t __kvf_internal_swapchains_capacity = 0;
+	static __KvfSwapchain* __kvf_internal_swapchains = NULL;
+	static size_t __kvf_internal_swapchains_size = 0;
+	static size_t __kvf_internal_swapchains_capacity = 0;
 #endif
 
-__KvfFramebuffer* __kvf_internal_framebuffers = NULL;
-size_t __kvf_internal_framebuffers_size = 0;
-size_t __kvf_internal_framebuffers_capacity = 0;
+static __KvfFramebuffer* __kvf_internal_framebuffers = NULL;
+static size_t __kvf_internal_framebuffers_size = 0;
+static size_t __kvf_internal_framebuffers_capacity = 0;
 
 #ifdef KVF_ENABLE_VALIDATION_LAYERS
-	VkDebugUtilsMessengerEXT __kvf_debug_messenger = VK_NULL_HANDLE;
-	char** __kvf_extra_layers = NULL;
-	size_t __kvf_extra_layers_count = 0;
+	static VkDebugUtilsMessengerEXT __kvf_debug_messenger = VK_NULL_HANDLE;
+	static char** __kvf_extra_layers = NULL;
+	static size_t __kvf_extra_layers_count = 0;
 #endif
 
-KvfErrorCallback __kvf_error_callback = NULL;
-KvfErrorCallback __kvf_warning_callback = NULL;
-KvfErrorCallback __kvf_validation_error_callback = NULL;
-KvfErrorCallback __kvf_validation_warning_callback = NULL;
+static KvfErrorCallback __kvf_error_callback = NULL;
+static KvfErrorCallback __kvf_warning_callback = NULL;
+static KvfErrorCallback __kvf_validation_error_callback = NULL;
+static KvfErrorCallback __kvf_validation_warning_callback = NULL;
 
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
-	KvfGlobalVulkanFunctions __kvf_g_fns;
-	KvfInstanceVulkanFunctions __kvf_i_fns;
+	static KvfGlobalVulkanFunctions __kvf_g_fns;
+	static KvfInstanceVulkanFunctions __kvf_i_fns;
 #endif
 
 void __kvfCheckVk(VkResult result, const char* function)
@@ -546,7 +549,7 @@ void __kvfCompleteDevice(VkPhysicalDevice physical, VkDevice device)
 			kvf_device = &__kvf_internal_devices[i];
 	}
 
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 	VkCommandPool pool;
 	VkCommandPoolCreateInfo pool_info = {};
@@ -580,7 +583,7 @@ void __kvfCompleteDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 			kvf_device = &__kvf_internal_devices[i];
 	}
 
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 	VkCommandPool pool;
 	VkCommandPoolCreateInfo pool_info = {};
@@ -596,36 +599,11 @@ void __kvfCompleteDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 	kvf_device->cmd_buffers_size = 0;
 	kvf_device->cmd_buffers_capacity = KVF_COMMAND_POOL_CAPACITY;
 	kvf_device->cmd_buffers = (VkCommandBuffer*)KVF_MALLOC(KVF_COMMAND_POOL_CAPACITY * sizeof(VkCommandBuffer));
+	kvf_device->callbacks = NULL;
 	KVF_ASSERT(kvf_device->cmd_buffers != NULL && "allocation failed :(");
 }
 
 void __kvfDestroyDescriptorPools(VkDevice device);
-
-void __kvfDestroyDevice(VkDevice device)
-{
-	KVF_ASSERT(device != VK_NULL_HANDLE);
-	for(size_t i = 0; i < __kvf_internal_devices_size; i++)
-	{
-		if(__kvf_internal_devices[i].device == device)
-		{
-			__KvfDevice* kvf_device = &__kvf_internal_devices[i];
-			KVF_FREE(kvf_device->cmd_buffers);
-			KVF_GET_DEVICE_FUNCTION(vkDestroyCommandPool)(device, kvf_device->cmd_pool, NULL);
-			__kvfDestroyDescriptorPools(device);
-			KVF_GET_DEVICE_FUNCTION(vkDestroyDevice)(device, NULL);
-			// Shift the elements to fill the gap
-			for(size_t j = i; j < __kvf_internal_devices_size - 1; j++)
-				__kvf_internal_devices[j] = __kvf_internal_devices[j + 1];
-			__kvf_internal_devices_size--;
-			if(__kvf_internal_devices_size == 0)
-			{
-				KVF_FREE(__kvf_internal_devices);
-				__kvf_internal_devices_capacity = 0;
-			}
-			return;
-		}
-    }
-}
 
 __KvfDevice* __kvfGetKvfDeviceFromVkPhysicalDevice(VkPhysicalDevice device)
 {
@@ -663,6 +641,43 @@ __KvfDevice* __kvfGetKvfDeviceFromVkCommandBuffer(VkCommandBuffer cmd)
 	return NULL;
 }
 
+void kvfSetAllocationCallbacks(VkDevice device, const VkAllocationCallbacks* callbacks)
+{
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	kvf_device->callbacks = (VkAllocationCallbacks*)KVF_MALLOC(sizeof(VkAllocationCallbacks));
+	KVF_ASSERT(kvf_device->callbacks && "allocation failed :(");
+	memcpy(kvf_device->callbacks, callbacks, sizeof(VkAllocationCallbacks));
+}
+
+void __kvfDestroyDevice(VkDevice device)
+{
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	for(size_t i = 0; i < __kvf_internal_devices_size; i++)
+	{
+		if(__kvf_internal_devices[i].device == device)
+		{
+			__KvfDevice* kvf_device = &__kvf_internal_devices[i];
+			KVF_FREE(kvf_device->cmd_buffers);
+			KVF_GET_DEVICE_FUNCTION(vkDestroyCommandPool)(device, kvf_device->cmd_pool, NULL);
+			__kvfDestroyDescriptorPools(device);
+			KVF_GET_DEVICE_FUNCTION(vkDestroyDevice)(device, NULL);
+			// Shift the elements to fill the gap
+			for(size_t j = i; j < __kvf_internal_devices_size - 1; j++)
+				__kvf_internal_devices[j] = __kvf_internal_devices[j + 1];
+			__kvf_internal_devices_size--;
+			if(__kvf_internal_devices_size == 0)
+			{
+				KVF_FREE(__kvf_internal_devices);
+				__kvf_internal_devices = NULL;
+				__kvf_internal_devices_capacity = 0;
+			}
+			return;
+		}
+    }
+}
+
 #ifndef KVF_NO_KHR
 	void __kvfAddSwapchainToArray(VkSwapchainKHR swapchain, __KvfSwapchainSupportInternal support, VkFormat format, uint32_t images_count, VkExtent2D extent)
 	{
@@ -670,7 +685,7 @@ __KvfDevice* __kvfGetKvfDeviceFromVkCommandBuffer(VkCommandBuffer cmd)
 		if(__kvf_internal_swapchains_size == __kvf_internal_swapchains_capacity)
 		{
 			// Resize the dynamic array if necessary
-			__kvf_internal_swapchains_capacity += 2;
+			__kvf_internal_swapchains_capacity += 5;
 			__kvf_internal_swapchains = (__KvfSwapchain*)KVF_REALLOC(__kvf_internal_swapchains, __kvf_internal_swapchains_capacity * sizeof(__KvfSwapchain));
 		}
 
@@ -687,16 +702,14 @@ __KvfDevice* __kvfGetKvfDeviceFromVkCommandBuffer(VkCommandBuffer cmd)
 		KVF_ASSERT(swapchain != VK_NULL_HANDLE);
 		KVF_ASSERT(device != VK_NULL_HANDLE);
 
-		#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-			__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-			KVF_ASSERT(kvf_device != NULL);
-		#endif
+		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 		for(size_t i = 0; i < __kvf_internal_swapchains_size; i++)
 		{
 			if(__kvf_internal_swapchains[i].swapchain == swapchain)
 			{
-				KVF_GET_DEVICE_FUNCTION(vkDestroySwapchainKHR)(device, swapchain, NULL);
+				KVF_GET_DEVICE_FUNCTION(vkDestroySwapchainKHR)(device, swapchain, kvf_device->callbacks);
 				// Shift the elements to fill the gap
 				for(size_t j = i; j < __kvf_internal_swapchains_size - 1; j++)
 					__kvf_internal_swapchains[j] = __kvf_internal_swapchains[j + 1];
@@ -704,6 +717,7 @@ __KvfDevice* __kvfGetKvfDeviceFromVkCommandBuffer(VkCommandBuffer cmd)
 				if(__kvf_internal_swapchains_size == 0)
 				{
 					KVF_FREE(__kvf_internal_swapchains);
+					__kvf_internal_swapchains = NULL;
 					__kvf_internal_swapchains_capacity = 0;
 				}
 				return;
@@ -729,7 +743,7 @@ void __kvfAddFramebufferToArray(VkFramebuffer framebuffer, VkExtent2D extent)
 	if(__kvf_internal_framebuffers_size == __kvf_internal_framebuffers_capacity)
 	{
 		// Resize the dynamic array if necessary
-		__kvf_internal_framebuffers_capacity += 2;
+		__kvf_internal_framebuffers_capacity += 5;
 		__kvf_internal_framebuffers = (__KvfFramebuffer*)KVF_REALLOC(__kvf_internal_framebuffers, __kvf_internal_framebuffers_capacity * sizeof(__KvfFramebuffer));
 	}
 
@@ -743,16 +757,14 @@ void __kvfDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer)
 	KVF_ASSERT(framebuffer != VK_NULL_HANDLE);
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 	for(size_t i = 0; i < __kvf_internal_framebuffers_size; i++)
 	{
 		if(__kvf_internal_framebuffers[i].framebuffer == framebuffer)
 		{
-			KVF_GET_DEVICE_FUNCTION(vkDestroyFramebuffer)(device, framebuffer, NULL);
+			KVF_GET_DEVICE_FUNCTION(vkDestroyFramebuffer)(device, framebuffer, kvf_device->callbacks);
 			// Shift the elements to fill the gap
 			for(size_t j = i; j < __kvf_internal_framebuffers_size - 1; j++)
 				__kvf_internal_framebuffers[j] = __kvf_internal_framebuffers[j + 1];
@@ -760,11 +772,13 @@ void __kvfDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer)
 			if(__kvf_internal_framebuffers_size == 0)
 			{
 				KVF_FREE(__kvf_internal_framebuffers);
+				__kvf_internal_framebuffers = NULL;
 				__kvf_internal_framebuffers_capacity = 0;
 			}
 			return;
 		}
     }
+	KVF_ASSERT(false && "could not find framebuffer");
 }
 
 __KvfFramebuffer* __kvfGetKvfFramebufferFromVkFramebuffer(VkFramebuffer framebuffer)
@@ -782,7 +796,7 @@ VkDescriptorPool __kvfDeviceCreateDescriptorPool(VkDevice device)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	kvf_device->sets_pools_size++;
 	kvf_device->sets_pools = (__KvfDescriptorPool*)KVF_REALLOC(kvf_device->sets_pools, kvf_device->sets_pools_size * sizeof(__KvfDescriptorPool));
 	memset(&kvf_device->sets_pools[kvf_device->sets_pools_size - 1], 0, sizeof(__KvfDescriptorPool));
@@ -817,7 +831,7 @@ void __kvfDestroyDescriptorPools(VkDevice device)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 	for(size_t i = 0; i < kvf_device->sets_pools_size; i++)
 		KVF_GET_DEVICE_FUNCTION(vkDestroyDescriptorPool)(device, kvf_device->sets_pools[i].pool, NULL);
@@ -962,7 +976,7 @@ VkFormat kvfFindSupportFormatInCandidates(VkDevice device, VkFormat* candidates,
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	for(size_t i = 0; i < candidates_count; i++)
 	{
 		VkFormatProperties props;
@@ -1515,7 +1529,7 @@ VkDevice kvfCreateDevice(VkPhysicalDevice physical, const char** extensions, uin
 
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkPhysicalDevice(physical);
 
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 	uint32_t queue_count = 0;
 	queue_count += (kvf_device->queues.graphics != -1);
@@ -1654,7 +1668,7 @@ VkDevice kvfCreateDeviceCustomPhysicalDeviceAndQueues(VkPhysicalDevice physical,
 		KVF_ASSERT(device != VK_NULL_HANDLE);
 		KVF_ASSERT(fns != NULL);
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkPhysicalDevice(physical);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 		kvf_device->fns = *fns;
 		__kvfCompleteDevice(physical, device);
 	}
@@ -1671,7 +1685,7 @@ VkQueue kvfGetDeviceQueue(VkDevice device, KvfQueueType queue)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkQueue vk_queue = VK_NULL_HANDLE;
 	if(queue == KVF_GRAPHICS_QUEUE)
 	{
@@ -1695,7 +1709,7 @@ uint32_t kvfGetDeviceQueueFamily(VkDevice device, KvfQueueType queue)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	if(queue == KVF_GRAPHICS_QUEUE)
 		return kvf_device->queues.graphics;
 	else if(queue == KVF_PRESENT_QUEUE)
@@ -1712,7 +1726,7 @@ uint32_t kvfGetDeviceQueueFamily(VkDevice device, KvfQueueType queue)
 		KVF_ASSERT(device != VK_NULL_HANDLE);
 		#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 			__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-			KVF_ASSERT(kvf_device != NULL);
+			KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 		#endif
 		VkPresentInfoKHR present_info = {};
 		present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1799,15 +1813,13 @@ int32_t kvfFindDeviceQueueFamily(VkPhysicalDevice physical, KvfQueueType type)
 VkFence kvfCreateFence(VkDevice device)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkFenceCreateInfo fence_info = {};
 	fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 	VkFence fence;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateFence)(device, &fence_info, NULL, &fence));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateFence)(device, &fence_info, kvf_device->callbacks, &fence));
 	return fence;
 }
 
@@ -1817,7 +1829,7 @@ void kvfWaitForFence(VkDevice device, VkFence fence)
 	KVF_ASSERT(fence != VK_NULL_HANDLE);
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	KVF_GET_DEVICE_FUNCTION(vkWaitForFences)(device, 1, &fence, VK_TRUE, UINT64_MAX);
 }
@@ -1827,24 +1839,20 @@ void kvfDestroyFence(VkDevice device, VkFence fence)
 	if(fence == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyFence)(device, fence, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyFence)(device, fence, kvf_device->callbacks);
 }
 
 VkSemaphore kvfCreateSemaphore(VkDevice device)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkSemaphoreCreateInfo semaphore_info = {};
 	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	VkSemaphore semaphore;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateSemaphore)(device, &semaphore_info, NULL, &semaphore));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateSemaphore)(device, &semaphore_info, kvf_device->callbacks, &semaphore));
 	return semaphore;
 }
 
@@ -1853,11 +1861,9 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 	if(semaphore == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroySemaphore)(device, semaphore, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroySemaphore)(device, semaphore, kvf_device->callbacks);
 }
 
 #ifndef KVF_NO_KHR
@@ -1875,12 +1881,12 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 			KVF_GET_INSTANCE_FUNCTION(vkGetPhysicalDeviceSurfaceFormatsKHR)(physical, surface, &support.formats_count, support.formats);
 		}
 
-		KVF_GET_INSTANCE_FUNCTION(vkGetPhysicalDeviceSurfacePresentModesKHR)(physical, surface, &support.presentModes_count, NULL);
-		if(support.presentModes_count != 0)
+		KVF_GET_INSTANCE_FUNCTION(vkGetPhysicalDeviceSurfacePresentModesKHR)(physical, surface, &support.present_modes_count, NULL);
+		if(support.present_modes_count != 0)
 		{
-			support.presentModes = (VkPresentModeKHR*)KVF_MALLOC(sizeof(VkPresentModeKHR) * support.presentModes_count);
-			KVF_ASSERT(support.presentModes != NULL && "allocation failed :(");
-			KVF_GET_INSTANCE_FUNCTION(vkGetPhysicalDeviceSurfacePresentModesKHR)(physical, surface, &support.presentModes_count, support.presentModes);
+			support.present_modes = (VkPresentModeKHR*)KVF_MALLOC(sizeof(VkPresentModeKHR) * support.present_modes_count);
+			KVF_ASSERT(support.present_modes != NULL && "allocation failed :(");
+			KVF_GET_INSTANCE_FUNCTION(vkGetPhysicalDeviceSurfacePresentModesKHR)(physical, surface, &support.present_modes_count, support.present_modes);
 		}
 		return support;
 	}
@@ -1897,13 +1903,21 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 
 	VkPresentModeKHR __kvfChooseSwapPresentMode(__KvfSwapchainSupportInternal* support, bool try_vsync)
 	{
-		if(try_vsync == false)
-			return VK_PRESENT_MODE_IMMEDIATE_KHR;
-		for(uint32_t i = 0; i < support->presentModes_count; i++)
+		if(try_vsync)
+			return VK_PRESENT_MODE_FIFO_KHR;
+		bool mailbox_supported = false;
+		bool immediate_supported = false;
+		for(uint32_t i = 0; i < support->present_modes_count; i++)
 		{
-			if(support->presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
-				return support->presentModes[i];
+			if(support->present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+			mailbox_supported = true;
+			if(support->present_modes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR)
+			immediate_supported = true;
 		}
+		if(mailbox_supported)
+			return VK_PRESENT_MODE_MAILBOX_KHR;
+		if(immediate_supported)
+			return VK_PRESENT_MODE_IMMEDIATE_KHR;  // Best mode for low latency
 		return VK_PRESENT_MODE_FIFO_KHR;
 	}
 
@@ -1913,21 +1927,21 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 		return t > max ? max : t;
 	}
 
-	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, bool try_vsync)
+	VkSwapchainKHR kvfCreateSwapchainKHR(VkDevice device, VkPhysicalDevice physical, VkSurfaceKHR surface, VkExtent2D extent, VkSwapchainKHR old_swapchain, bool try_vsync)
 	{
 		KVF_ASSERT(device != VK_NULL_HANDLE);
 		VkSwapchainKHR swapchain;
 		__KvfSwapchainSupportInternal support = __kvfQuerySwapchainSupport(physical, surface);
 
 		VkSurfaceFormatKHR surfaceFormat = __kvfChooseSwapSurfaceFormat(&support);
-		VkPresentModeKHR presentMode = __kvfChooseSwapPresentMode(&support, try_vsync);
+		VkPresentModeKHR present_mode = __kvfChooseSwapPresentMode(&support, try_vsync);
 
 		uint32_t image_count = support.capabilities.minImageCount + 1;
 		if(support.capabilities.maxImageCount > 0 && image_count > support.capabilities.maxImageCount)
 			image_count = support.capabilities.maxImageCount;
 
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 		uint32_t queue_family_indices[] = { (uint32_t)kvf_device->queues.graphics, (uint32_t)kvf_device->queues.present };
 
@@ -1950,9 +1964,9 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		createInfo.preTransform = support.capabilities.currentTransform;
 		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		createInfo.presentMode = presentMode;
+		createInfo.presentMode = present_mode;
 		createInfo.clipped = VK_TRUE;
-		createInfo.oldSwapchain = VK_NULL_HANDLE;
+		createInfo.oldSwapchain = old_swapchain;
 
 		if(kvf_device->queues.graphics != kvf_device->queues.present)
 		{
@@ -1963,7 +1977,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 		else
 			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-		__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateSwapchainKHR)(device, &createInfo, NULL, &swapchain));
+		__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateSwapchainKHR)(device, &createInfo, kvf_device->callbacks, &swapchain));
 
 		uint32_t images_count;
 		KVF_GET_DEVICE_FUNCTION(vkGetSwapchainImagesKHR)(device, swapchain, (uint32_t*)&images_count, NULL);
@@ -1975,6 +1989,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 
 	VkFormat kvfGetSwapchainImagesFormat(VkSwapchainKHR swapchain)
 	{
+		KVF_ASSERT(swapchain != VK_NULL_HANDLE);
 		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
 		KVF_ASSERT(kvf_swapchain != NULL);
 		return kvf_swapchain->images_format;
@@ -1982,6 +1997,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 
 	uint32_t kvfGetSwapchainImagesCount(VkSwapchainKHR swapchain)
 	{
+		KVF_ASSERT(swapchain != VK_NULL_HANDLE);
 		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
 		KVF_ASSERT(kvf_swapchain != NULL);
 		return kvf_swapchain->images_count;
@@ -1989,6 +2005,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 
 	uint32_t kvfGetSwapchainMinImagesCount(VkSwapchainKHR swapchain)
 	{
+		KVF_ASSERT(swapchain != VK_NULL_HANDLE);
 		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
 		KVF_ASSERT(kvf_swapchain != NULL);
 		return kvf_swapchain->support.capabilities.minImageCount;
@@ -1996,6 +2013,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 
 	VkExtent2D kvfGetSwapchainImagesSize(VkSwapchainKHR swapchain)
 	{
+		KVF_ASSERT(swapchain != VK_NULL_HANDLE);
 		__KvfSwapchain* kvf_swapchain = __kvfGetKvfSwapchainFromVkSwapchainKHR(swapchain);
 		KVF_ASSERT(kvf_swapchain != NULL);
 		return kvf_swapchain->images_extent;
@@ -2013,10 +2031,8 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 VkImage kvfCreateImage(VkDevice device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, KvfImageType type)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkImageCreateInfo image_info = {};
 	image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -2039,7 +2055,7 @@ VkImage kvfCreateImage(VkDevice device, uint32_t width, uint32_t height, VkForma
 	}
 
 	VkImage image;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateImage)(device, &image_info, NULL, &image));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateImage)(device, &image_info, kvf_device->callbacks, &image));
 	return image;
 }
 
@@ -2050,7 +2066,7 @@ void kvfCopyImageToBuffer(VkCommandBuffer cmd, VkBuffer dst, VkImage src, size_t
 	KVF_ASSERT(src != VK_NULL_HANDLE);
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkCommandBuffer(cmd);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	VkOffset3D offset = { 0, 0, 0 };
 	VkBufferImageCopy region = {};
@@ -2071,20 +2087,16 @@ void kvfDestroyImage(VkDevice device, VkImage image)
 	if(image == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyImage)(device, image, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyImage)(device, image, kvf_device->callbacks);
 }
 
 VkImageView kvfCreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageViewType type, VkImageAspectFlags aspect, int layer_count)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkImageViewCreateInfo create_info = {};
 	create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	create_info.image = image;
@@ -2100,7 +2112,7 @@ VkImageView kvfCreateImageView(VkDevice device, VkImage image, VkFormat format, 
 	create_info.subresourceRange.baseArrayLayer = 0;
 	create_info.subresourceRange.layerCount = layer_count;
 	VkImageView view;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateImageView)(device, &create_info, NULL, &view));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateImageView)(device, &create_info, kvf_device->callbacks, &view));
 	return view;
 }
 
@@ -2108,23 +2120,22 @@ void kvfDestroyImageView(VkDevice device, VkImageView image_view)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	KVF_ASSERT(image_view != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyImageView)(device, image_view, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyImageView)(device, image_view, kvf_device->callbacks);
 }
 
 void kvfTransitionImageLayout(VkDevice device, VkImage image, KvfImageType type, VkCommandBuffer cmd, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, bool is_single_time_cmd_buffer)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
+	KVF_ASSERT(cmd != VK_NULL_HANDLE);
 
 	if(new_layout == old_layout)
 		return;
 
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 
 	if(is_single_time_cmd_buffer)
@@ -2177,10 +2188,8 @@ void kvfTransitionImageLayout(VkDevice device, VkImage image, KvfImageType type,
 VkSampler kvfCreateSampler(VkDevice device, VkFilter filters, VkSamplerAddressMode address_modes, VkSamplerMipmapMode mipmap_mode)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkSamplerCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	info.magFilter = filters;
@@ -2194,7 +2203,7 @@ VkSampler kvfCreateSampler(VkDevice device, VkFilter filters, VkSamplerAddressMo
 	info.anisotropyEnable = VK_FALSE;
 	info.maxAnisotropy = 1.0f;
 	VkSampler sampler;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateSampler)(device, &info, NULL, &sampler));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateSampler)(device, &info, kvf_device->callbacks, &sampler));
 	return sampler;
 }
 
@@ -2203,27 +2212,23 @@ void kvfDestroySampler(VkDevice device, VkSampler sampler)
 	if(sampler == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroySampler)(device, sampler, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroySampler)(device, sampler, kvf_device->callbacks);
 }
 
 VkBuffer kvfCreateBuffer(VkDevice device, VkBufferUsageFlags usage, VkDeviceSize size)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkBufferCreateInfo buffer_info = {};
 	buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	buffer_info.size = size;
 	buffer_info.usage = usage;
 	buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VkBuffer buffer;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateBuffer)(device, &buffer_info, NULL, &buffer));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateBuffer)(device, &buffer_info, kvf_device->callbacks, &buffer));
 	return buffer;
 }
 
@@ -2234,7 +2239,7 @@ void kvfCopyBufferToBuffer(VkCommandBuffer cmd, VkBuffer dst, VkBuffer src, size
 	KVF_ASSERT(src != VK_NULL_HANDLE);
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkCommandBuffer(cmd);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	VkBufferCopy copy_region = {};
 	copy_region.size = size;
@@ -2248,7 +2253,7 @@ void kvfCopyBufferToImage(VkCommandBuffer cmd, VkImage dst, VkBuffer src, size_t
 	KVF_ASSERT(src != VK_NULL_HANDLE);
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkCommandBuffer(cmd);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	VkOffset3D offset = { 0, 0, 0 };
 	VkBufferImageCopy region = {};
@@ -2269,22 +2274,17 @@ void kvfDestroyBuffer(VkDevice device, VkBuffer buffer)
 	if(buffer != VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyBuffer)(device, buffer, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyBuffer)(device, buffer, kvf_device->callbacks);
 }
 
 VkFramebuffer kvfCreateFramebuffer(VkDevice device, VkRenderPass render_pass, VkImageView* image_views, size_t image_views_count, VkExtent2D extent)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	KVF_ASSERT(image_views != NULL);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkFramebufferCreateInfo framebuffer_info = {};
 	framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	framebuffer_info.renderPass = render_pass;
@@ -2294,7 +2294,7 @@ VkFramebuffer kvfCreateFramebuffer(VkDevice device, VkRenderPass render_pass, Vk
 	framebuffer_info.height = extent.height;
 	framebuffer_info.layers = 1;
 	VkFramebuffer framebuffer = VK_NULL_HANDLE;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateFramebuffer)(device, &framebuffer_info, NULL, &framebuffer));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateFramebuffer)(device, &framebuffer_info, kvf_device->callbacks, &framebuffer));
 	__kvfAddFramebufferToArray(framebuffer, extent);
 	return framebuffer;
 }
@@ -2324,7 +2324,7 @@ VkCommandBuffer kvfCreateCommandBufferLeveled(VkDevice device, VkCommandBufferLe
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 	VkCommandPool pool = kvf_device->cmd_pool;
 	VkCommandBuffer buffer;
@@ -2335,7 +2335,7 @@ VkCommandBuffer kvfCreateCommandBufferLeveled(VkDevice device, VkCommandBufferLe
 	alloc_info.commandBufferCount = 1;
 	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkAllocateCommandBuffers)(device, &alloc_info, &buffer));
 
-	if(kvf_device->cmd_buffers_size == kvf_device->cmd_buffers_capacity)
+	if(kvf_device->cmd_buffers_size >= kvf_device->cmd_buffers_capacity)
 	{
 		// Resize the dynamic array if necessary
 		kvf_device->cmd_buffers_capacity += KVF_COMMAND_POOL_CAPACITY;
@@ -2352,7 +2352,7 @@ void kvfBeginCommandBuffer(VkCommandBuffer buffer, VkCommandBufferUsageFlags usa
 	KVF_ASSERT(buffer != VK_NULL_HANDLE);
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkCommandBuffer(buffer);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	VkCommandBufferBeginInfo begin_info = {};
 	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2365,7 +2365,7 @@ void kvfEndCommandBuffer(VkCommandBuffer buffer)
 	KVF_ASSERT(buffer != VK_NULL_HANDLE);
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkCommandBuffer(buffer);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkEndCommandBuffer)(buffer));
 }
@@ -2376,7 +2376,7 @@ void kvfSubmitCommandBuffer(VkDevice device, VkCommandBuffer buffer, KvfQueueTyp
 
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	VkSemaphore signal_semaphores[1];
 	VkSemaphore wait_semaphores[1];
@@ -2403,7 +2403,7 @@ void kvfSubmitSingleTimeCommandBuffer(VkDevice device, VkCommandBuffer buffer, K
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 
 	if(fence != VK_NULL_HANDLE)
@@ -2416,6 +2416,29 @@ void kvfSubmitSingleTimeCommandBuffer(VkDevice device, VkCommandBuffer buffer, K
 	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkQueueSubmit)(kvfGetDeviceQueue(device, queue), 1, &submit_info, fence));
 	if(fence != VK_NULL_HANDLE)
 		kvfWaitForFence(device, fence);	
+}
+
+void kvfDestroyCommandBuffer(VkDevice device, VkCommandBuffer buffer)
+{
+	if(buffer == VK_NULL_HANDLE)
+		return;
+	KVF_ASSERT(device != VK_NULL_HANDLE);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+
+	for(size_t i = 0; i < kvf_device->cmd_buffers_size; i++)
+	{
+		if(kvf_device->cmd_buffers[i] == buffer)
+		{
+			KVF_GET_DEVICE_FUNCTION(vkFreeCommandBuffers)(kvf_device->device, kvf_device->cmd_pool, 1, &buffer);
+			// Shift the elements to fill the gap
+			for(size_t j = i; j < kvf_device->cmd_buffers_size - 1; j++)
+				kvf_device->cmd_buffers[j] = kvf_device->cmd_buffers[j + 1];
+			kvf_device->cmd_buffers_size--;
+			return;
+		}
+    }
+	KVF_ASSERT(false && "could not find command buffer in internal device");
 }
 
 VkAttachmentDescription kvfBuildAttachmentDescription(KvfImageType type, VkFormat format, VkImageLayout initial, VkImageLayout final, bool clear, VkSampleCountFlagBits samples)
@@ -2529,10 +2552,8 @@ VkRenderPass kvfCreateRenderPassWithSubpassDependencies(VkDevice device, VkAttac
 		}
 	}
 
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 
 	VkSubpassDescription subpass = {};
 	subpass.pipelineBindPoint = bind_point;
@@ -2550,7 +2571,7 @@ VkRenderPass kvfCreateRenderPassWithSubpassDependencies(VkDevice device, VkAttac
 	renderpass_create_info.pDependencies = dependencies;
 
 	VkRenderPass render_pass = VK_NULL_HANDLE;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateRenderPass)(device, &renderpass_create_info, NULL, &render_pass));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateRenderPass)(device, &renderpass_create_info, kvf_device->callbacks, &render_pass));
 	KVF_FREE(color_references);
 	KVF_FREE(depth_references);
 	return render_pass;
@@ -2561,11 +2582,9 @@ void kvfDestroyRenderPass(VkDevice device, VkRenderPass renderPass)
 	if(renderPass == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyRenderPass)(device, renderPass, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyRenderPass)(device, renderPass, kvf_device->callbacks);
 }
 
 void kvfBeginRenderPass(VkRenderPass pass, VkCommandBuffer cmd, VkFramebuffer framebuffer, VkExtent2D framebuffer_extent, VkClearValue* clears, size_t clears_count)
@@ -2574,7 +2593,7 @@ void kvfBeginRenderPass(VkRenderPass pass, VkCommandBuffer cmd, VkFramebuffer fr
 	KVF_ASSERT(framebuffer != VK_NULL_HANDLE);
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkCommandBuffer(cmd);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 
 	VkOffset2D offset = { 0, 0 };
@@ -2592,16 +2611,14 @@ void kvfBeginRenderPass(VkRenderPass pass, VkCommandBuffer cmd, VkFramebuffer fr
 VkShaderModule kvfCreateShaderModule(VkDevice device, uint32_t* code, size_t size)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkShaderModuleCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	createInfo.codeSize = size * sizeof(uint32_t);
 	createInfo.pCode = code;
 	VkShaderModule shader = VK_NULL_HANDLE;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateShaderModule)(device, &createInfo, NULL, &shader));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateShaderModule)(device, &createInfo, kvf_device->callbacks, &shader));
 	return shader;
 }
 
@@ -2610,27 +2627,23 @@ void kvfDestroyShaderModule(VkDevice device, VkShaderModule shader)
 	if(shader == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyShaderModule)(device, shader, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyShaderModule)(device, shader, kvf_device->callbacks);
 }
 
 VkDescriptorSetLayout kvfCreateDescriptorSetLayout(VkDevice device, VkDescriptorSetLayoutBinding* bindings, size_t bindings_count)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkDescriptorSetLayoutCreateInfo layout_info = {};
 	layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layout_info.bindingCount = bindings_count;
 	layout_info.pBindings = bindings;
 
 	VkDescriptorSetLayout layout;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateDescriptorSetLayout)(device, &layout_info, NULL, &layout));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateDescriptorSetLayout)(device, &layout_info, kvf_device->callbacks, &layout));
 	return layout;
 }
 
@@ -2639,18 +2652,16 @@ void kvfDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout layout
 	if(layout == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyDescriptorSetLayout)(device, layout, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyDescriptorSetLayout)(device, layout, kvf_device->callbacks);
 }
 
 VkDescriptorSet kvfAllocateDescriptorSet(VkDevice device, VkDescriptorSetLayout layout)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkDescriptorPool pool = VK_NULL_HANDLE;
 	for(uint32_t i = 0; i < kvf_device->sets_pools_size; i++)
 	{
@@ -2676,7 +2687,7 @@ void kvfUpdateStorageBufferToDescriptorSet(VkDevice device, VkDescriptorSet set,
 {
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	VkWriteDescriptorSet write = kvfWriteStorageBufferToDescriptorSet(device, set, info, binding);
 	KVF_GET_DEVICE_FUNCTION(vkUpdateDescriptorSets)(device, 1, &write, 0, NULL);
@@ -2686,7 +2697,7 @@ void kvfUpdateUniformBufferToDescriptorSet(VkDevice device, VkDescriptorSet set,
 {
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	VkWriteDescriptorSet write = kvfWriteUniformBufferToDescriptorSet(device, set, info, binding);
 	KVF_GET_DEVICE_FUNCTION(vkUpdateDescriptorSets)(device, 1, &write, 0, NULL);
@@ -2696,7 +2707,7 @@ void kvfUpdateImageToDescriptorSet(VkDevice device, VkDescriptorSet set, const V
 {
 	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
 		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
+		KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	#endif
 	VkWriteDescriptorSet write = kvfWriteImageToDescriptorSet(device, set, info, binding);
 	KVF_GET_DEVICE_FUNCTION(vkUpdateDescriptorSets)(device, 1, &write, 0, NULL);
@@ -2714,6 +2725,7 @@ VkWriteDescriptorSet kvfWriteStorageBufferToDescriptorSet(VkDevice device, VkDes
 	descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	descriptor_write.descriptorCount = 1;
 	descriptor_write.pBufferInfo = info;
+	descriptor_write.pNext = NULL;
 	return descriptor_write;
 }
 
@@ -2729,6 +2741,7 @@ VkWriteDescriptorSet kvfWriteUniformBufferToDescriptorSet(VkDevice device, VkDes
 	descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	descriptor_write.descriptorCount = 1;
 	descriptor_write.pBufferInfo = info;
+	descriptor_write.pNext = NULL;
 	return descriptor_write;
 }
 
@@ -2744,16 +2757,15 @@ VkWriteDescriptorSet kvfWriteImageToDescriptorSet(VkDevice device, VkDescriptorS
 	descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	descriptor_write.descriptorCount = 1;
 	descriptor_write.pImageInfo = info;
+	descriptor_write.pNext = NULL;
 	return descriptor_write;
 }
 
 VkPipelineLayout kvfCreatePipelineLayout(VkDevice device, VkDescriptorSetLayout* set_layouts, size_t set_layouts_count, VkPushConstantRange* pc, size_t pc_count)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkPipelineLayoutCreateInfo pipeline_layout_info = {};
 	pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipeline_layout_info.setLayoutCount = set_layouts_count;
@@ -2762,7 +2774,7 @@ VkPipelineLayout kvfCreatePipelineLayout(VkDevice device, VkDescriptorSetLayout*
 	pipeline_layout_info.pPushConstantRanges = pc;
 
 	VkPipelineLayout layout;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreatePipelineLayout)(device, &pipeline_layout_info, NULL, &layout));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreatePipelineLayout)(device, &pipeline_layout_info, kvf_device->callbacks, &layout));
 	return layout;
 }
 
@@ -2771,18 +2783,16 @@ void kvfDestroyPipelineLayout(VkDevice device, VkPipelineLayout layout)
 	if(layout == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyPipelineLayout)(device, layout, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyPipelineLayout)(device, layout, kvf_device->callbacks);
 }
 
 void kvfResetDeviceDescriptorPools(VkDevice device)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-	KVF_ASSERT(kvf_device != NULL);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	for(uint32_t i = 0; i < kvf_device->sets_pools_size; i++)
 	{
 		KVF_GET_DEVICE_FUNCTION(vkResetDescriptorPool)(device, kvf_device->sets_pools[i].pool, 0);
@@ -2939,9 +2949,9 @@ void kvfGPipelineBuilderAddShaderStage(KvfGraphicsPipelineBuilder* builder, VkSh
 {
 	KVF_ASSERT(builder != NULL);
 	builder->shader_stages = (VkPipelineShaderStageCreateInfo*)KVF_REALLOC(builder->shader_stages, sizeof(VkPipelineShaderStageCreateInfo) * (builder->shader_stages_count + 1));
-	KVF_ASSERT(builder->shader_stages != NULL);
+	KVF_ASSERT(builder->shader_stages != NULL && "allocation failed :(");
 	memset(&builder->shader_stages[builder->shader_stages_count], 0, sizeof(VkPipelineShaderStageCreateInfo));
-	char* entry_ptr = (char*)KVF_MALLOC(strlen(entry));
+	char* entry_ptr = (char*)KVF_MALLOC(strlen(entry) + 1);
 	KVF_ASSERT(entry_ptr != NULL && "allocation failed :(");
 	strcpy(entry_ptr, entry);
 	builder->shader_stages[builder->shader_stages_count].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -2963,7 +2973,7 @@ void kvfGPipelineBuilderResetShaderStages(KvfGraphicsPipelineBuilder* builder)
 	builder->shader_stages_count = 0;
 }
 
-VkPipeline kvfCreateGraphicsPipeline(VkDevice device, VkPipelineLayout layout, KvfGraphicsPipelineBuilder* builder, VkRenderPass pass)
+VkPipeline kvfCreateGraphicsPipeline(VkDevice device, VkPipelineCache cache, VkPipelineLayout layout, KvfGraphicsPipelineBuilder* builder, VkRenderPass pass)
 {
 	KVF_ASSERT(builder != NULL);
 	KVF_ASSERT(device != VK_NULL_HANDLE);
@@ -3010,23 +3020,19 @@ VkPipeline kvfCreateGraphicsPipeline(VkDevice device, VkPipelineLayout layout, K
 	pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
 	pipeline_info.pDepthStencilState = &builder->depth_stencil_state;
 
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
 	VkPipeline pipeline;
-	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateGraphicsPipelines)(device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline));
+	__kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateGraphicsPipelines)(device, cache, 1, &pipeline_info, kvf_device->callbacks, &pipeline));
 	return pipeline;
 }
 
 void kvfDestroyPipeline(VkDevice device, VkPipeline pipeline)
 {
 	KVF_ASSERT(device != VK_NULL_HANDLE);
-	#ifdef KVF_IMPL_VK_NO_PROTOTYPES
-		__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
-		KVF_ASSERT(kvf_device != NULL);
-	#endif
-	KVF_GET_DEVICE_FUNCTION(vkDestroyPipeline)(device, pipeline, NULL);
+	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
+	KVF_ASSERT(kvf_device != NULL && "could not find VkDevice in registered devices");
+	KVF_GET_DEVICE_FUNCTION(vkDestroyPipeline)(device, pipeline, kvf_device->callbacks);
 }
 
 #endif // KVF_IMPLEMENTATION
