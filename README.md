@@ -45,7 +45,7 @@ int main(void)
 	// Swapchain creation
 	VkExtent2D extent;
 	SDL_Vulkan_GetDrawableSize(win, (int*)&extent.width, (int*)&extent.height);
-	VkSwapchainKHR swapchain = kvfCreateSwapchainKHR(device, ph_device, surface, extent, VK_NULL_HANDLE, true);
+	VkSwapchainKHR swapchain = kvfCreateSwapchainKHR(device, ph_device, surface, extent, VK_NULL_HANDLE, true, true);
 
 	// Swapchain images acquisition
 	uint32_t swapchain_images_count = kvfGetSwapchainImagesCount(swapchain);
