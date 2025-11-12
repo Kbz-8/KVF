@@ -1297,7 +1297,7 @@ void kvfAddLayer(const char* layer)
 
 VkInstance kvfCreateInstance(const char** extensions_enabled, uint32_t extensions_count)
 {
-	return kvfCreateInstanceNext(extensions_enabled, extension_count, NULL);
+	return kvfCreateInstanceNext(extensions_enabled, extensions_count, NULL);
 }
 
 VkInstance kvfCreateInstanceNext(const char** extensions_enabled, uint32_t extensions_count, void* p_next)
