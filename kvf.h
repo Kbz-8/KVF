@@ -1330,6 +1330,8 @@ VkInstance kvfCreateInstanceNext(const char** extensions_enabled, uint32_t exten
 		memcpy(new_extension_set, extensions_enabled, sizeof(char*) * extensions_count);
 		new_extension_set[extensions_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 
+		debug_create_info.pNext = p_next;
+
 		create_info.enabledExtensionCount = extensions_count + 1;
 		create_info.ppEnabledExtensionNames = new_extension_set;
 		create_info.enabledLayerCount = __kvf_extra_layers_count;
