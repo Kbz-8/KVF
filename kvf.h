@@ -1152,7 +1152,7 @@ const char* kvfVerbaliseVkResult(VkResult result)
 		case VK_ERROR_OUT_OF_DATE_KHR: return "A surface has changed in such a way that it is no longer compatible with the swapchain";
 		case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: return "The display used by a swapchain does not use the same presentable image layout";
 		case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: return "The requested window is already connected to a VkSurfaceKHR, or to some other non-Vulkan API";
-		case VK_ERROR_VALIDATION_FAILED_EXT: return "A validation layer found an error";
+		case VK_ERROR_VALIDATION_FAILED: return "A command failed because invalid usage was detected by the implementation or a validation layer.";
 
 		default: return "Unknown Vulkan error";
 	}
