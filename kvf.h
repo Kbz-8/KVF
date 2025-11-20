@@ -2324,7 +2324,7 @@ void kvfCopyBufferToImage(VkCommandBuffer cmd, VkImage dst, VkBuffer src, size_t
 
 void kvfDestroyBuffer(VkDevice device, VkBuffer buffer)
 {
-	if(buffer != VK_NULL_HANDLE)
+	if(buffer == VK_NULL_HANDLE)
 		return;
 	KVF_ASSERT(device != VK_NULL_HANDLE);
 	__KvfDevice* kvf_device = __kvfGetKvfDeviceFromVkDevice(device);
