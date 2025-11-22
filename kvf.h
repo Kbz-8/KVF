@@ -236,6 +236,7 @@ VkPipeline kvfCreateGraphicsPipeline(VkDevice device, VkPipelineCache cache, VkP
 void kvfDestroyPipeline(VkDevice device, VkPipeline pipeline);
 
 void kvfCheckVk(VkResult result);
+int32_t kvfFindMemoryType(VkPhysicalDevice physical_device, uint32_t type_filter, VkMemoryPropertyFlags properties);
 
 #ifdef KVF_IMPL_VK_NO_PROTOTYPES
 	#ifdef KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE
@@ -518,6 +519,19 @@ void __kvfCheckVk(VkResult result, const char* function)
 void kvfCheckVk(VkResult result)
 {
 	__kvfCheckVk(result);
+}
+
+int32_t kvfFindMemoryType(VkPhysicalDevice physical_device, uint32_t type_filter, VkMemoryPropertyFlags properties)
+{
+	VkPhysicalDeviceMemoryProperties mem_properties;
+	KVF_GET_INSTANCE_FUNCTION(vkGetPhysicalDeviceMemoryProperties)(physical_device, &mem_properties);
+
+	for(int32_t i = 0; i < mem_properties.memoryTypeCount; i++)
+	{
+		if((type_filter & (1 << i)) && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties)
+			return i;
+	}
+	return -1;
 }
 
 void __kvfAddDeviceToArray(VkPhysicalDevice device, int32_t graphics_queue, int32_t present_queue, int32_t compute_queue)
