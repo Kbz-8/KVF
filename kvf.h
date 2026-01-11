@@ -526,7 +526,7 @@ int32_t kvfFindMemoryType(VkPhysicalDevice physical_device, uint32_t type_filter
 	VkPhysicalDeviceMemoryProperties mem_properties;
 	KVF_GET_INSTANCE_FUNCTION(vkGetPhysicalDeviceMemoryProperties)(physical_device, &mem_properties);
 
-	for(int32_t i = 0; i < mem_properties.memoryTypeCount; i++)
+	for(int32_t i = 0; i < (int32_t)mem_properties.memoryTypeCount; i++)
 	{
 		if((type_filter & (1 << i)) && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties)
 			return i;
