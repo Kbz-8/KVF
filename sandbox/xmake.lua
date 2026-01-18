@@ -1,0 +1,11 @@
+add_requires("libsdl2", { configs = { sdlmain = false } })
+add_requires("vulkan-headers")
+
+target("test")
+	set_kind("binary")
+	add_linkdirs("./")
+	add_files("main.c", { languages = "c99" })
+	add_defines("SDL_MAIN_HANDLED")
+	add_packages("libsdl2", "vulkan-headers")
+	add_syslinks("vulkan")
+target_end()

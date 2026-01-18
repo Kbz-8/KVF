@@ -2,3 +2,5 @@
 *.swp
 *.swx
 sandbox/test
+sandbox/build/
+sandbox/.xmake/
