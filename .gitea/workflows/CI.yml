@@ -39,7 +39,7 @@ jobs:
         actions-cache-folder: .xmake-cache-W${{ steps.cache_key.outputs.key }}
 
     - name: Update xmake repository
-      run: cd sandbox && xmake repo --root --update
+      run: cd sandbox && xmake repo --update
 
     - name: Build test
-      run: cd sandbox && xmake --yes --root
+      run: cd sandbox && xmake --yes
