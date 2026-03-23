@@ -351,6 +351,42 @@ int32_t kvfFindMemoryType(VkPhysicalDevice physical_device, uint32_t type_filter
 			KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetPhysicalDeviceSurfaceFormatsKHR);
 			KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetPhysicalDeviceSurfacePresentModesKHR);
 			KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetPhysicalDeviceSurfaceSupportKHR);
+
+			#ifdef VK_USE_PLATFORM_ANDROID_KHR
+				#ifdef VK_KHR_android_surface
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateAndroidSurfaceKHR);
+				#endif
+			#endif
+
+			#ifdef VK_USE_PLATFORM_XCB_KHR
+				#ifdef VK_KHR_xcb_surface
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateXcbSurfaceKHR);
+				#endif
+			#endif
+
+			#ifdef VK_USE_PLATFORM_XLIB_KHR
+				#ifdef VK_KHR_xlib_surface
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateXlibSurfaceKHR);
+				#endif
+			#endif
+
+			#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+				#ifdef VK_KHR_wayland_surface
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateWaylandSurfaceKHR);
+				#endif
+			#endif
+
+			#ifdef VK_USE_PLATFORM_WIN32_KHR
+				#ifdef VK_KHR_win32_surface
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateWin32SurfaceKHR);
+				#endif
+			#endif
+
+			#ifdef VK_USE_PLATFORM_METAL_EXT
+				#ifdef VK_EXT_metal_surface
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateMetalSurfaceEXT);
+				#endif
+			#endif
 		#endif
 	};
 
@@ -412,42 +448,6 @@ int32_t kvfFindMemoryType(VkPhysicalDevice physical_device, uint32_t type_filter
 			KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkDestroySwapchainKHR);
 			KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetSwapchainImagesKHR);
 			KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkQueuePresentKHR);
-
-			#ifdef VK_USE_PLATFORM_ANDROID_KHR
-				#ifdef VK_KHR_android_surface
-					AK_VULKAN_INSTANCE_FUNCTION(vkCreateAndroidSurfaceKHR);
-				#endif
-			#endif
-
-			#ifdef VK_USE_PLATFORM_XCB_KHR
-				#ifdef VK_KHR_xcb_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateXcbSurfaceKHR);
-				#endif
-			#endif
-
-			#ifdef VK_USE_PLATFORM_XLIB_KHR
-				#ifdef VK_KHR_xlib_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateXlibSurfaceKHR);
-				#endif
-			#endif
-
-			#ifdef VK_USE_PLATFORM_WAYLAND_KHR
-				#ifdef VK_KHR_wayland_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateWaylandSurfaceKHR);
-				#endif
-			#endif
-
-			#ifdef VK_USE_PLATFORM_WIN32_KHR
-				#ifdef VK_KHR_win32_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateWin32SurfaceKHR);
-				#endif
-			#endif
-
-			#ifdef VK_USE_PLATFORM_METAL_EXT
-				#ifdef VK_EXT_metal_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateMetalSurfaceEXT);
-				#endif
-			#endif
 		#endif
 	};
 #endif
@@ -2222,7 +2222,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 					create_info.pNext = nullptr;
 					create_info.flags = 0;
 					create_info.window = (ANativeWindow*)window_handle;
-					kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateAndroidSurfaceKHR)(instance, &create_info, NULL, &surface));
+					kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateAndroidSurfaceKHR)(instance, &create_info, NULL, &surface));
 					break;
 				}
 			#endif
@@ -2236,7 +2236,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 					create_info.flags = 0;
 					create_info.dpy = (Display*)instance_handle;
 					create_info.window = *(Window*)window_handle;
-					kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateXlibSurfaceKHR)(instance, &create_info, NULL, &surface));
+					kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateXlibSurfaceKHR)(instance, &create_info, NULL, &surface));
 					break;
 				}
 			#endif
@@ -2250,7 +2250,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 					create_info.flags = 0;
 					create_info.connection = (xcb_connection_t*)instance_handle;
 					create_info.window = (*xcb_window_t*)window_handle;
-					kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateXcbSurfaceKHR)(instance, &create_info, NULL, &surface));
+					kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateXcbSurfaceKHR)(instance, &create_info, NULL, &surface));
 					break;
 				}
 			#endif
@@ -2264,7 +2264,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 					create_info.flags = 0;
 					create_info.display = (wl_display*)instance_handle;
 					create_info.surface = (wl_surface*)window_handle;
-					kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateWaylandSurfaceKHR)(instance, &create_info, NULL, &surface));
+					kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateWaylandSurfaceKHR)(instance, &create_info, NULL, &surface));
 					break;
 				}
 			#endif
@@ -2278,7 +2278,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 				create_info.flags = 0;
 				create_info.hinstance = (HINSTANCE)instance_handle;
 				create_info.hwnd = (HWND)window_handle;
-				kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateWin32SurfaceKHR)(instance, &create_info, NULL, &surface));
+				kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateWin32SurfaceKHR)(instance, &create_info, NULL, &surface));
 				break;
 			}
 			#endif
@@ -2291,7 +2291,7 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 					create_info.pNext = nullptr;
 					create_info.flags = 0;
 					create_info.pLayer = (CAMetalLayer*)window_handle;
-					kvfCheckVk(KVF_GET_DEVICE_FUNCTION(vkCreateMetalSurfaceEXT)(instance, &create_info, NULL, &surface));
+					kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateMetalSurfaceEXT)(instance, &create_info, NULL, &surface));
 					break;
 				}
 			#endif
