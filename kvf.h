@@ -2215,9 +2215,9 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 		switch(type)
 		{
 			#ifdef VK_USE_PLATFORM_ANDROID_KHR
-				case: KVF_SURFACE_ANDROID:
+				case KVF_SURFACE_ANDROID:
 				{
-					VkAndroidSurfaceCreateInfoKHR create_info = {0};
+					VkAndroidSurfaceCreateInfoKHR create_info = {};
 					create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
 					create_info.pNext = nullptr;
 					create_info.flags = 0;
@@ -2228,9 +2228,9 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 			#endif
 
 			#ifdef VK_USE_PLATFORM_XLIB_KHR
-				case: KVF_SURFACE_XLIB:
+				case KVF_SURFACE_XLIB:
 				{
-					VkXlibSurfaceCreateInfoKHR create_info = {0};
+					VkXlibSurfaceCreateInfoKHR create_info = {};
 					create_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
 					create_info.pNext = nullptr;
 					create_info.flags = 0;
@@ -2242,9 +2242,9 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 			#endif
 
 			#ifdef VK_USE_PLATFORM_XCB_KHR
-				case: KVF_SURFACE_XCB:
+				case KVF_SURFACE_XCB:
 				{
-					VkXcbSurfaceCreateInfoKHR create_info = {0};
+					VkXcbSurfaceCreateInfoKHR create_info = {};
 					create_info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
 					create_info.pNext = nullptr;
 					create_info.flags = 0;
@@ -2256,9 +2256,9 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 			#endif
 
 			#ifdef VK_USE_PLATFORM_WAYLAND_KHR
-				case: KVF_SURFACE_WAYLAND:
+				case KVF_SURFACE_WAYLAND:
 				{
-					VkWaylandSurfaceCreateInfoKHR create_info = {0};
+					VkWaylandSurfaceCreateInfoKHR create_info = {};
 					create_info.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
 					create_info.pNext = nullptr;
 					create_info.flags = 0;
@@ -2270,23 +2270,23 @@ void kvfDestroySemaphore(VkDevice device, VkSemaphore semaphore)
 			#endif
 
 			#ifdef VK_USE_PLATFORM_WIN32_KHR
-			case: KVF_SURFACE_WINDOWS:
-			{
-				VkWin32SurfaceCreateInfoKHR create_info = {0};
-				create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-				create_info.pNext = nullptr;
-				create_info.flags = 0;
-				create_info.hinstance = (HINSTANCE)instance_handle;
-				create_info.hwnd = (HWND)window_handle;
-				kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateWin32SurfaceKHR)(instance, &create_info, NULL, &surface));
-				break;
-			}
+				case KVF_SURFACE_WINDOWS:
+				{
+					VkWin32SurfaceCreateInfoKHR create_info = {};
+					create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+					create_info.pNext = nullptr;
+					create_info.flags = 0;
+					create_info.hinstance = (HINSTANCE)instance_handle;
+					create_info.hwnd = (HWND)window_handle;
+					kvfCheckVk(KVF_GET_INSTANCE_FUNCTION(vkCreateWin32SurfaceKHR)(instance, &create_info, NULL, &surface));
+					break;
+				}
 			#endif
 
 			#ifdef VK_USE_PLATFORM_METAL_EXT
-				case: KVF_SURFACE_METAL:
+				case KVF_SURFACE_METAL:
 				{
-					VkMetalSurfaceCreateInfoEXT create_info = {0};
+					VkMetalSurfaceCreateInfoEXT create_info = {};
 					create_info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_KHR;
 					create_info.pNext = nullptr;
 					create_info.flags = 0;
