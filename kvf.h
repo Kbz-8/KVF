@@ -415,41 +415,37 @@ int32_t kvfFindMemoryType(VkPhysicalDevice physical_device, uint32_t type_filter
 
 			#ifdef VK_USE_PLATFORM_ANDROID_KHR
 				#ifdef VK_KHR_android_surface
-					AK_VULKAN_INSTANCE_FUNCTION(vkCreateAndroidSurfaceKHR)
+					AK_VULKAN_INSTANCE_FUNCTION(vkCreateAndroidSurfaceKHR);
 				#endif
 			#endif
 
 			#ifdef VK_USE_PLATFORM_XCB_KHR
 				#ifdef VK_KHR_xcb_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateXcbSurfaceKHR)
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetPhysicalDeviceXcbPresentationSupportKHR)
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateXcbSurfaceKHR);
 				#endif
 			#endif
 
 			#ifdef VK_USE_PLATFORM_XLIB_KHR
 				#ifdef VK_KHR_xlib_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateXlibSurfaceKHR)
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetPhysicalDeviceXlibPresentationSupportKHR)
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateXlibSurfaceKHR);
 				#endif
 			#endif
 
 			#ifdef VK_USE_PLATFORM_WAYLAND_KHR
 				#ifdef VK_KHR_wayland_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateWaylandSurfaceKHR)
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetPhysicalDeviceWaylandPresentationSupportKHR)
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateWaylandSurfaceKHR);
 				#endif
 			#endif
 
 			#ifdef VK_USE_PLATFORM_WIN32_KHR
 				#ifdef VK_KHR_win32_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateWin32SurfaceKHR)
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkGetPhysicalDeviceWin32PresentationSupportKHR)
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateWin32SurfaceKHR);
 				#endif
 			#endif
 
 			#ifdef VK_USE_PLATFORM_METAL_EXT
 				#ifdef VK_EXT_metal_surface
-					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateMetalSurfaceEXT)
+					KVF_DEFINE_VULKAN_FUNCTION_PROTOTYPE(vkCreateMetalSurfaceEXT);
 				#endif
 			#endif
 		#endif
